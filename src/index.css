@@ -1,0 +1,59 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+:root {
+  --background: #fcfcfc;
+  --foreground: #1e293b;
+  --sidebar: #fafafa;
+  --sidebar-foreground: #242424;
+  --sidebar-accent: #f4f4f5;
+  --sidebar-accent-foreground: #333333;
+  --sidebar-border: #eaeaea;
+  --sidebar-ring: #b0b0b0;
+  --sidebar-muted: #737373;
+}
+
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.recharts-cartesian-grid-horizontal line,
+.recharts-cartesian-grid-vertical line {
+  stroke: #e2e8f0;
+}
+
+/* Remove default browser focus ring on Recharts SVG when clicked */
+.recharts-wrapper,
+.recharts-surface,
+.recharts-wrapper:focus,
+.recharts-wrapper *:focus,
+.recharts-surface:focus {
+  outline: none !important;
+}
+
+@keyframes ai-gradient-shift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.ai-gradient-animated {
+  background: linear-gradient(
+    135deg,
+    #8b5cf6 0%,
+    #d946ef 25%,
+    #fb923c 50%,
+    #d946ef 75%,
+    #8b5cf6 100%
+  );
+  background-size: 200% 200%;
+  animation: ai-gradient-shift 6s ease-in-out infinite;
+}

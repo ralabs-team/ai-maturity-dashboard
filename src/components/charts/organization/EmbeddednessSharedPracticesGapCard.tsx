@@ -1,0 +1,106 @@
+import { useState } from 'react';
+import { ScatterChart, Scatter, ResponsiveContainer, CartesianGrid, XAxis, YAxis, ZAxis, Tooltip, Cell, ReferenceLine } from '../recharts';
+
+type Scope = 'department' | 'team';
+type Row = { name: string; respondents: number; embeddedness: number; sharedPractices: number; color: string };
+
+function TooltipContent({
+  active,
+  payload,
+  scope,
+}: {
+  active?: boolean;
+  payload?: Array<{ payload?: Row }>;
+  scope: Scope;
+}) {
+  const point = payload?.[0]?.payload;
+  if (!active || !point) return null;
+  return (
+    <div className="rounded-md bg-[#242424] px-4 py-3 text-sm text-white shadow-lg">
+      <div className="mb-2 font-semibold text-white">
+        {scope === 'department' ? 'Department' : 'Team'}: {point.name}
+      </div>
+      <div className="space-y-1">
+        <div>Embeddedness: {point.embeddedness.toFixed(1)} / 5</div>
+        <div>Shared practices: {point.sharedPractices.toFixed(1)} / 5</div>
+        <div>Respondents: {point.respondents}</div>
+      </div>
+    </div>
+  );
+}
+
+export default function EmbeddednessSharedPracticesGapCard({
+  departmentRows,
+  teamRows,
+}: {
+  departmentRows: Row[];
+  teamRows: Row[];
+}) {
+  const [scope, setScope] = useState<Scope>('department');
+  const rows = scope === 'department' ? departmentRows : teamRows;
+
+  return (
+    <section className="rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
+      <h3 className="text-lg font-semibold tracking-tight text-[#242424]">
+        Embeddedness vs shared practices
+      </h3>
+      <p className="mt-1 text-sm text-[#7a7a7a]">
+        Compare how deeply people use AI individually against whether teams have shared guidelines or reusable practices. This shows where AI is strong at the individual level but weak at the team-operating-model level.
+      </p>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        {(['department', 'team'] as const).map((option) => (
+          <button
+            key={option}
+            type="button"
+            onClick={() => setScope(option)}
+            className={`rounded-full border px-4 py-2 text-sm font-medium transition ${
+              scope === option
+                ? 'border-[#bfdbfe] bg-[#eff6ff] text-[#1d4ed8]'
+                : 'border-[#e5e7eb] bg-white text-[#525252] hover:bg-[#f8f8f8]'
+            }`}
+          >
+            {option === 'department' ? 'Department' : 'Team'}
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-6 h-[340px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <ScatterChart margin={{ top: 10, right: 12, left: 0, bottom: 18 }}>
+            <CartesianGrid stroke="#ececec" strokeDasharray="3 3" />
+            <XAxis
+              type="number"
+              dataKey="embeddedness"
+              domain={[1, 5]}
+              ticks={[1, 2, 3, 4, 5]}
+              tick={{ fontSize: 12, fill: '#737373' }}
+              axisLine={false}
+              tickLine={false}
+              label={{ value: 'Individual embeddedness', position: 'bottom', offset: 6, fill: '#525252', fontSize: 12, fontWeight: 600 }}
+            />
+            <YAxis
+              type="number"
+              dataKey="sharedPractices"
+              domain={[1, 5]}
+              ticks={[1, 2, 3, 4, 5]}
+              tick={{ fontSize: 12, fill: '#737373' }}
+              axisLine={false}
+              tickLine={false}
+              label={{ value: 'Shared practices', angle: -90, position: 'insideLeft', fill: '#525252', fontSize: 12, fontWeight: 600 }}
+            />
+            <ZAxis type="number" dataKey="respondents" range={[160, 1100]} />
+            <Tooltip isAnimationActive={false} content={<TooltipContent scope={scope} />} />
+            <ReferenceLine x={3} stroke="#d4d4d8" strokeDasharray="4 4" />
+            <ReferenceLine y={3} stroke="#d4d4d8" strokeDasharray="4 4" />
+            <Scatter data={rows}>
+              {rows.map((row) => (
+                <Cell key={row.name} fill={row.color} stroke="#ffffff" strokeWidth={2} />
+              ))}
+            </Scatter>
+          </ScatterChart>
+        </ResponsiveContainer>
+      </div>
+    </section>
+  );
+}
