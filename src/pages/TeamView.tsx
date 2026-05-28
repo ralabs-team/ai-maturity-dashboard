@@ -1038,17 +1038,20 @@ export default function TeamView() {
         .slice(0, 10),
     [selectedScopeIndividuals],
   );
+  const selectedScopeChampionCount = useMemo(
+    () =>
+      buildChampionRows(selectedScopeIndividuals).filter(
+        (row) => row.championScore >= AI_CHAMPION_SCORE_THRESHOLD,
+      ).length,
+    [selectedScopeIndividuals],
+  );
   const selectedScopeChampionShare = useMemo(() => {
     if (selectedScopeIndividuals.length === 0) {
       return 0;
     }
 
-    const championCount = buildChampionRows(selectedScopeIndividuals).filter(
-      (row) => row.championScore >= AI_CHAMPION_SCORE_THRESHOLD,
-    ).length;
-
-    return (championCount / selectedScopeIndividuals.length) * 100;
-  }, [selectedScopeIndividuals]);
+    return (selectedScopeChampionCount / selectedScopeIndividuals.length) * 100;
+  }, [selectedScopeChampionCount, selectedScopeIndividuals]);
 
   const getAiResearchPack = async (): Promise<AiResearchPack> => {
     if (aiResearchPackRef.current) {
@@ -1284,6 +1287,7 @@ export default function TeamView() {
         selectedTeamLevelNumber={selectedTeamLevelNumber}
         selectedTeamOverallScore={selectedTeamOverallScore}
         selectedTeamResponseCount={selectedTeamResponseCount}
+        aiChampionCount={selectedScopeChampionCount}
         aiChampionShare={selectedScopeChampionShare}
         isPreparingAiResearchPack={isPreparingAiResearchPack}
         onDownloadAiResearchPack={downloadAiResearchPack}

@@ -10,6 +10,7 @@ type TeamSummarySectionProps = {
   selectedTeamLevelNumber: number;
   selectedTeamOverallScore: number;
   selectedTeamResponseCount: number;
+  aiChampionCount: number;
   aiChampionShare: number;
   isPreparingAiResearchPack: boolean;
   onDownloadAiResearchPack: () => void;
@@ -23,6 +24,7 @@ export default function TeamSummarySection({
   selectedTeamLevelNumber,
   selectedTeamOverallScore,
   selectedTeamResponseCount,
+  aiChampionCount,
   aiChampionShare,
   isPreparingAiResearchPack,
   onDownloadAiResearchPack,
@@ -57,7 +59,9 @@ export default function TeamSummarySection({
           {
             title: 'AI champions',
             value: formatPercent(aiChampionShare),
-            detail: 'High maturity, strong impact, and knowledge spread',
+            detail: `${aiChampionCount} of ${selectedTeamResponseCount} ${
+              selectedTeamResponseCount === 1 ? 'respondent clears' : 'respondents clear'
+            } the champion threshold`,
             onClick: onJumpToAiChampions,
           },
         ].map((card, index) => (
