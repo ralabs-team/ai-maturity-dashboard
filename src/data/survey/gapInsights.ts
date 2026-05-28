@@ -64,6 +64,43 @@ export type RiskGovernanceHotspotRow = {
   color: string;
 };
 
+export type TeamGapMemberBase = {
+  name: string;
+  role: string;
+  overall: number;
+  level: string;
+  color: string;
+  size: number;
+};
+
+export type TeamUsageImpactPoint = TeamGapMemberBase & {
+  usage: number;
+  impact: number;
+};
+
+export type TeamSupportDemandPoint = TeamGapMemberBase & {
+  baselineSkills: number;
+  supportDemand: number;
+  supportSignals: number;
+};
+
+export type TeamToolAccessPoint = TeamGapMemberBase & {
+  access: number;
+  costMaturity: number;
+  fundedAccess: boolean;
+};
+
+export type TeamWorkflowTransformationPoint = TeamGapMemberBase & {
+  hoursSaved: number;
+  transformation: number;
+};
+
+export type TeamRiskGovernancePoint = TeamGapMemberBase & {
+  safetyScore: number;
+  governancePressure: number;
+  blockerLabel: string | null;
+};
+
 const ORG_QUADRANT_COLORS = {
   highHigh: '#0f766e',
   highLow: '#2563eb',
@@ -612,6 +649,57 @@ function riskGovernanceHotspotColor(
   return '#0f766e';
 }
 
+function memberBubbleSize(overall: number): number {
+  return Math.round(260 + overall * 110);
+}
+
+function zipScopedMembers(
+  individuals: Individual[],
+  responses: RawResponse[],
+): Array<{ individual: Individual; response: RawResponse }> {
+  const pairCount = Math.min(individuals.length, responses.length);
+
+  return Array.from({ length: pairCount }, (_, index) => ({
+    individual: individuals[index],
+    response: responses[index],
+  }));
+}
+
+function supportDemandSignalCount(response: RawResponse): number {
+  const supportAnswer = response.surveyType === 'business' ? response.q4_10 : response.q4_12;
+  const trainingAnswer = response.surveyType === 'business' ? response.q4_11 : response.q4_13;
+  const supportSignals = new Set(
+    splitSurveyMultiValue(supportAnswer)
+      .map((answer) => supportDemandAnswerKey(answer))
+      .filter((value): value is string => Boolean(value)),
+  );
+  const handsOnLabel = normalizeHandsOnHelpLabel(trainingAnswer);
+  const handsOnSignal = handsOnLabel && handsOnLabel !== 'No hands-on help needed' ? 1 : 0;
+
+  return supportSignals.size + handsOnSignal;
+}
+
+function supportDemandIntensity(response: RawResponse): number {
+  return roundToOne((supportDemandSignalCount(response) / 6) * 100);
+}
+
+function governancePressureFromBlocker(
+  surveyType: SurveyType,
+  rawValue: string | undefined,
+): number {
+  const blockerLabel = normalizeBlockerLabel(surveyType, rawValue);
+
+  if (!blockerLabel || blockerLabel === BLOCKER_LABEL_BY_KEY.nothingMostlySkills) {
+    return 0;
+  }
+
+  if (blockerIsGovernanceHotspot(blockerLabel)) {
+    return 100;
+  }
+
+  return 45;
+}
+
 export function buildUsageImpactQuadrant(
   members: Individual[],
   scope: GapScope,
@@ -922,6 +1010,203 @@ export function buildRiskGovernanceHotspotRows(
       (left, right) =>
         left.safetyScore - right.safetyScore ||
         right.governanceBlockerShare - left.governanceBlockerShare ||
+        left.name.localeCompare(right.name),
+    );
+}
+
+export function buildScopedUsageImpactPoints(
+  individuals: Individual[],
+  responses: RawResponse[],
+): TeamUsageImpactPoint[] {
+  return zipScopedMembers(individuals, responses)
+    .map(({ individual }) => ({
+      name: individual.name,
+      role: individual.role,
+      overall: roundToOne(individual.overallScore),
+      level: LEVEL_LABELS[scoreToLevel(individual.overallScore)],
+      usage: roundToOne(individual.scores.Usage),
+      impact: roundToOne(individual.scores.Impact),
+      color: usageImpactQuadrantColor(individual.scores.Usage, individual.scores.Impact),
+      size: memberBubbleSize(individual.overallScore),
+    }))
+    .sort((left, right) => right.overall - left.overall || left.name.localeCompare(right.name));
+}
+
+export function buildScopedTeamSupportDemandPoints(
+  individuals: Individual[],
+  responses: RawResponse[],
+): TeamSupportDemandPoint[] {
+  return zipScopedMembers(individuals, responses)
+    .map(({ individual, response }) => {
+      const baselineSkills = skillsBaselineScore(
+        response.surveyType ?? 'delivery-engineering',
+        response.q2_1,
+      );
+
+      if (baselineSkills === null) {
+        return null;
+      }
+
+      const supportDemand = supportDemandIntensity(response);
+
+      return {
+        name: individual.name,
+        role: individual.role,
+        overall: roundToOne(individual.overallScore),
+        level: LEVEL_LABELS[scoreToLevel(individual.overallScore)],
+        baselineSkills,
+        supportDemand,
+        supportSignals: supportDemandSignalCount(response),
+        color:
+          supportDemand >= 50 && baselineSkills < 3
+            ? '#dc2626'
+            : supportDemand >= 50
+              ? '#f59e0b'
+              : baselineSkills < 3
+                ? '#2563eb'
+                : '#0f766e',
+        size: memberBubbleSize(individual.overallScore),
+      };
+    })
+    .filter((row): row is TeamSupportDemandPoint => Boolean(row))
+    .sort(
+      (left, right) =>
+        right.supportDemand - left.supportDemand ||
+        left.baselineSkills - right.baselineSkills ||
+        left.name.localeCompare(right.name),
+    );
+}
+
+export function buildScopedToolAccessPoints(
+  individuals: Individual[],
+  responses: RawResponse[],
+): TeamToolAccessPoint[] {
+  return zipScopedMembers(individuals, responses)
+    .map(({ individual, response }) => {
+      const access = accessLicensingScore(
+        response.surveyType === 'business' ? response.q3_10 : response.q3_7,
+      );
+      const pricingScore = pricingUnderstandingScore(
+        response.surveyType === 'business' ? response.q3_9 : response.q3_6,
+      );
+      const considerationScore = costConsiderationScore(
+        response.surveyType === 'business' ? response.q3_12 : response.q3_10,
+      );
+      const costScores = [pricingScore, considerationScore].filter(isNumber);
+
+      if (access === null || costScores.length === 0) {
+        return null;
+      }
+
+      const costMaturity = roundToOne(average(costScores));
+
+      return {
+        name: individual.name,
+        role: individual.role,
+        overall: roundToOne(individual.overallScore),
+        level: LEVEL_LABELS[scoreToLevel(individual.overallScore)],
+        access,
+        costMaturity,
+        fundedAccess: companyOrClientFunded(
+          response.surveyType === 'business' ? response.q3_11 : response.q3_9,
+        ),
+        color: usageImpactQuadrantColor(access, costMaturity),
+        size: memberBubbleSize(individual.overallScore),
+      };
+    })
+    .filter((row): row is TeamToolAccessPoint => Boolean(row))
+    .sort(
+      (left, right) =>
+        left.access + left.costMaturity - (right.access + right.costMaturity) ||
+        left.name.localeCompare(right.name),
+    );
+}
+
+export function buildScopedWorkflowTransformationPoints(
+  individuals: Individual[],
+  responses: RawResponse[],
+): TeamWorkflowTransformationPoint[] {
+  return zipScopedMembers(individuals, responses)
+    .map(({ individual, response }) => {
+      const hoursSaved = hoursSavedEstimate(
+        response.surveyType === 'business' ? response.q3_7 : response.q3_4,
+      );
+      const transformation = workflowTransformationScore(
+        response.surveyType ?? 'delivery-engineering',
+        response.surveyType === 'business' ? response.q3_5 : response.q3_3,
+      );
+
+      if (hoursSaved === null || transformation === null) {
+        return null;
+      }
+
+      return {
+        name: individual.name,
+        role: individual.role,
+        overall: roundToOne(individual.overallScore),
+        level: LEVEL_LABELS[scoreToLevel(individual.overallScore)],
+        hoursSaved: roundToOne(hoursSaved),
+        transformation,
+        color:
+          hoursSaved >= 3 && transformation < 3
+            ? '#f59e0b'
+            : hoursSaved >= 3 && transformation >= 3
+              ? '#0f766e'
+              : transformation >= 3
+                ? '#2563eb'
+                : '#94a3b8',
+        size: memberBubbleSize(individual.overallScore),
+      };
+    })
+    .filter((row): row is TeamWorkflowTransformationPoint => Boolean(row))
+    .sort(
+      (left, right) =>
+        right.transformation - left.transformation ||
+        right.hoursSaved - left.hoursSaved ||
+        left.name.localeCompare(right.name),
+    );
+}
+
+export function buildScopedRiskGovernancePoints(
+  individuals: Individual[],
+  responses: RawResponse[],
+): TeamRiskGovernancePoint[] {
+  return zipScopedMembers(individuals, responses)
+    .map(({ individual, response }) => {
+      const safetyScore = sensitiveDataScore(
+        response.surveyType === 'business' ? response.q2_3 : response.q2_4,
+      );
+
+      if (safetyScore === null) {
+        return null;
+      }
+
+      const blockerLabel = normalizeBlockerLabel(
+        response.surveyType ?? 'delivery-engineering',
+        response.surveyType === 'business' ? response.q3_blocker : response.q3_12,
+      );
+      const governancePressure = governancePressureFromBlocker(
+        response.surveyType ?? 'delivery-engineering',
+        response.surveyType === 'business' ? response.q3_blocker : response.q3_12,
+      );
+
+      return {
+        name: individual.name,
+        role: individual.role,
+        overall: roundToOne(individual.overallScore),
+        level: LEVEL_LABELS[scoreToLevel(individual.overallScore)],
+        safetyScore,
+        governancePressure,
+        blockerLabel,
+        color: riskGovernanceHotspotColor(safetyScore, governancePressure),
+        size: memberBubbleSize(individual.overallScore),
+      };
+    })
+    .filter((row): row is TeamRiskGovernancePoint => Boolean(row))
+    .sort(
+      (left, right) =>
+        left.safetyScore - right.safetyScore ||
+        right.governancePressure - left.governancePressure ||
         left.name.localeCompare(right.name),
     );
 }

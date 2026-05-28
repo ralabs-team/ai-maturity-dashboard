@@ -30,7 +30,6 @@ import SearchableMultiSelect from '../components/ui/SearchableMultiSelect';
 import PageHeader from '../components/layout/PageHeader';
 import FloatingSectionNav from '../components/layout/FloatingSectionNav';
 import { useNavigationPending } from '../components/layout/NavigationPendingContext';
-import DimensionComparison from '../components/charts/DimensionComparison';
 import { useSurveyData } from '../data/survey/SurveyDataContext';
 import { getQuestionsForSurveyType, type QuestionMeta } from '../data/survey/questions';
 import { computeScores } from '../data/survey/scoring';
@@ -41,6 +40,7 @@ import { MAX_DIMENSION_SCORE } from '../data/types';
 type PersonMapDimension = TechDimension;
 type SortKey = 'name' | 'level' | PersonMapDimension | 'updated';
 type SortDir = 'asc' | 'desc';
+type PersonMapSeriesKey = 'person' | 'roleAverage' | 'teamAverage';
 
 const INDIVIDUAL_DIMENSIONS: Array<{ key: PersonMapDimension; label: string }> = [
   { key: 'Usage', label: 'Dim1: Usage' },
@@ -163,6 +163,25 @@ function getSortValue(person: Individual, key: SortKey): number | string {
     default:
       return person.scores[key as TechDimension];
   }
+}
+
+function roundToOne(value: number): number {
+  return Number(value.toFixed(1));
+}
+
+function averageDimensionScores(members: Individual[]): Record<TechDimension, number> {
+  const averages = {} as Record<TechDimension, number>;
+
+  for (const dimension of TECH_DIMENSIONS) {
+    averages[dimension] =
+      members.reduce((sum, member) => sum + member.scores[dimension], 0) / members.length;
+  }
+
+  return averages;
+}
+
+function formatSignedDelta(value: number): string {
+  return `${value >= 0 ? '+' : ''}${value.toFixed(1)}`;
 }
 
 function SortHeader({
@@ -295,8 +314,10 @@ export default function IndividualView() {
     searchParams.getAll('department'),
   );
   const [breakdownOpen, setBreakdownOpen] = useState(false);
-  const [comparisonOpen, setComparisonOpen] = useState(false);
+  const [gapsOpen, setGapsOpen] = useState(false);
   const [answersOpen, setAnswersOpen] = useState(false);
+  const [hiddenPersonMapSeries, setHiddenPersonMapSeries] = useState<PersonMapSeriesKey[]>([]);
+  const [isPreparingAiResearchPack, setIsPreparingAiResearchPack] = useState(false);
   const allProjectNames = useMemo(
     () => [...new Set(individuals.flatMap((individual) => individual.allProjects))].sort((a, b) => a.localeCompare(b)),
     [individuals],
@@ -333,8 +354,9 @@ export default function IndividualView() {
   // Reset all sections to collapsed whenever a new person is selected
   useEffect(() => {
     setBreakdownOpen(false);
-    setComparisonOpen(false);
+    setGapsOpen(false);
     setAnswersOpen(false);
+    setHiddenPersonMapSeries([]);
   }, [selectedPersonId]);
 
   useEffect(() => {
@@ -348,6 +370,24 @@ export default function IndividualView() {
       current.filter((department) => allDepartmentNames.includes(department)),
     );
   }, [allDepartmentNames]);
+
+  useEffect(() => {
+    if (!selectedPersonId) {
+      return undefined;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setSelectedPersonId(null);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [selectedPersonId]);
 
   useEffect(() => {
     const nextNameQuery = searchParams.get('name') ?? '';
@@ -557,12 +597,247 @@ export default function IndividualView() {
   const selectedPerson = selectedPersonId
     ? individuals.find((i) => i.id === selectedPersonId)
     : null;
-
   const personColor = '#14b8a6';
   const personMapStrokeWidth = 2;
   const personMapFillOpacity = 0;
+  const roleBenchmarkColor = '#94a3b8';
+  const teamBenchmarkColor = '#2563eb';
+  const selectedPersonResponse = useMemo(
+    () =>
+      selectedPerson
+        ? rawResponses.find((response) => response.username.split('@')[0] === selectedPerson.id) ?? null
+        : null,
+    [rawResponses, selectedPerson],
+  );
+  const selectedPersonScoredResponse = useMemo(
+    () => (selectedPersonResponse ? computeScores(selectedPersonResponse) : null),
+    [selectedPersonResponse],
+  );
+  const selectedPersonRolePeers = useMemo(
+    () =>
+      selectedPerson
+        ? individuals.filter(
+            (person) => person.id !== selectedPerson.id && person.role === selectedPerson.role,
+          )
+        : [],
+    [individuals, selectedPerson],
+  );
+  const selectedPersonTeamScopeNames = useMemo(
+    () =>
+      selectedPerson
+        ? selectedPerson.allProjects
+            .map((project) => project.trim())
+            .filter((project) => project && project.toLowerCase() !== 'n/a')
+        : [],
+    [selectedPerson],
+  );
+  const selectedPersonTeamCohort = useMemo(() => {
+    if (!selectedPerson || selectedPersonTeamScopeNames.length === 0) {
+      return [];
+    }
+
+    const teamSet = new Set(selectedPersonTeamScopeNames);
+
+    return individuals.filter((person) =>
+      person.allProjects.some((project) => teamSet.has(project.trim())),
+    );
+  }, [individuals, selectedPerson, selectedPersonTeamScopeNames]);
+  const selectedPersonTeamPeers = useMemo(
+    () =>
+      selectedPersonTeamCohort.filter((person) =>
+        selectedPerson ? person.id !== selectedPerson.id : true,
+      ),
+    [selectedPerson, selectedPersonTeamCohort],
+  );
+  const roleBenchmarkLabel = selectedPerson
+    ? `Avg ${selectedPerson.role} peers`
+    : 'Avg same role';
+  const teamBenchmarkLabel = 'Avg current team(s)';
+  const roleAverageScores = useMemo(
+    () =>
+      selectedPersonRolePeers.length > 0
+        ? averageDimensionScores(selectedPersonRolePeers)
+        : null,
+    [selectedPersonRolePeers],
+  );
+  const teamAverageScores = useMemo(
+    () =>
+      selectedPersonTeamPeers.length > 0
+        ? averageDimensionScores(selectedPersonTeamPeers)
+        : null,
+    [selectedPersonTeamPeers],
+  );
+  const personMapData = useMemo(
+    () =>
+      selectedPerson
+        ? TECH_DIMENSIONS.map((dimension) => ({
+            dimension,
+            you: selectedPerson.scores[dimension],
+            roleAverage: roleAverageScores?.[dimension],
+            teamAverage: teamAverageScores?.[dimension],
+          }))
+        : [],
+    [roleAverageScores, selectedPerson, teamAverageScores],
+  );
+  const personMapSeriesMeta = useMemo<
+    Record<PersonMapSeriesKey, { color: string; label: string }>
+  >(
+    () => ({
+      person: {
+        color: personColor,
+        label: 'This respondent',
+      },
+      roleAverage: {
+        color: roleBenchmarkColor,
+        label: `${roleBenchmarkLabel}${roleAverageScores ? ` (${selectedPersonRolePeers.length})` : ' unavailable'}`,
+      },
+      teamAverage: {
+        color: teamBenchmarkColor,
+        label: `${teamBenchmarkLabel}${teamAverageScores ? ` (${selectedPersonTeamPeers.length})` : ' unavailable'}`,
+      },
+    }),
+    [
+      personColor,
+      roleAverageScores,
+      roleBenchmarkColor,
+      roleBenchmarkLabel,
+      selectedPersonRolePeers.length,
+      selectedPersonTeamPeers.length,
+      teamAverageScores,
+      teamBenchmarkColor,
+      teamBenchmarkLabel,
+    ],
+  );
+  const visiblePersonMapSeries = useMemo(
+    () =>
+      (Object.keys(personMapSeriesMeta) as PersonMapSeriesKey[]).filter(
+        (key) => !hiddenPersonMapSeries.includes(key),
+      ),
+    [hiddenPersonMapSeries, personMapSeriesMeta],
+  );
+  const biggestGaps = useMemo(() => {
+    if (!selectedPerson) {
+      return [];
+    }
+
+    const benchmarks = [
+      {
+        label: 'Org average',
+        respondentCount: individuals.length,
+        scores: orgAvgScores,
+      },
+      ...(roleAverageScores
+        ? [
+            {
+              label: roleBenchmarkLabel,
+              respondentCount: selectedPersonRolePeers.length,
+              scores: roleAverageScores,
+            },
+          ]
+        : []),
+      ...(teamAverageScores
+        ? [
+            {
+              label: teamBenchmarkLabel,
+              respondentCount: selectedPersonTeamPeers.length,
+              scores: teamAverageScores,
+            },
+          ]
+        : []),
+    ];
+
+    return TECH_DIMENSIONS.flatMap((dimension) =>
+      benchmarks.map((benchmark) => ({
+        dimension,
+        benchmarkLabel: benchmark.label,
+        respondentCount: benchmark.respondentCount,
+        personScore: selectedPerson.scores[dimension],
+        benchmarkScore: benchmark.scores[dimension],
+        delta: roundToOne(selectedPerson.scores[dimension] - benchmark.scores[dimension]),
+      })),
+    )
+      .filter((row) => row.delta < 0)
+      .sort(
+        (left, right) =>
+          left.delta - right.delta || left.dimension.localeCompare(right.dimension),
+      )
+      .slice(0, 3);
+  }, [
+    individuals.length,
+    orgAvgScores,
+    roleAverageScores,
+    roleBenchmarkLabel,
+    selectedPerson,
+    selectedPersonRolePeers.length,
+    selectedPersonTeamPeers.length,
+    teamAverageScores,
+  ]);
 
   const hasSelection = !!selectedPerson;
+
+  const openExternalAi = (url: string) => {
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  const togglePersonMapSeries = (seriesKey: PersonMapSeriesKey) => {
+    setHiddenPersonMapSeries((current) =>
+      current.includes(seriesKey)
+        ? current.filter((key) => key !== seriesKey)
+        : [...current, seriesKey],
+    );
+  };
+
+  const downloadIndividualAiResearchPack = async () => {
+    if (!selectedPerson || !selectedPersonResponse) {
+      return;
+    }
+
+    setIsPreparingAiResearchPack(true);
+
+    try {
+      const { buildIndividualAiResearchPack } = await import('../data/survey/individualAiResearchPack');
+      const aiResearchPack = buildIndividualAiResearchPack({
+        person: selectedPerson,
+        rawResponse: selectedPersonResponse,
+        orgBenchmark: {
+          label: 'Org average',
+          respondentCount: individuals.length,
+          scores: orgAvgScores,
+        },
+        roleBenchmark: roleAverageScores
+          ? {
+              label: roleBenchmarkLabel,
+              respondentCount: selectedPersonRolePeers.length,
+              scores: roleAverageScores,
+            }
+          : null,
+        teamBenchmark: teamAverageScores
+          ? {
+              label: teamBenchmarkLabel,
+              respondentCount: selectedPersonTeamPeers.length,
+              scores: teamAverageScores,
+            }
+          : null,
+        teamNames: selectedPersonTeamScopeNames,
+      });
+      const blob = new Blob([aiResearchPack.markdown], {
+        type: 'text/markdown;charset=utf-8',
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+
+      link.href = url;
+      link.download = aiResearchPack.filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('[individual] Failed to build AI research pack', error);
+    } finally {
+      setIsPreparingAiResearchPack(false);
+    }
+  };
 
   return (
     <div className="relative">
@@ -813,7 +1088,7 @@ export default function IndividualView() {
           />
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setSelectedPersonId(null)}>
             <div
-              className="bg-white rounded-xl shadow-lg border border-[#eaeaea] w-full max-w-3xl max-h-[90vh] overflow-y-auto"
+              className="bg-white rounded-xl shadow-lg border border-[#eaeaea] w-full max-w-4xl max-h-[90vh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Modal header */}
@@ -837,10 +1112,69 @@ export default function IndividualView() {
                 </button>
               </div>
 
-              {/* Modal body */}
-              <div className="px-6 py-5 flex flex-col gap-2 bg-[#fcfcfc]">
-                {/* Person Maturity Map (collapsible) */}
-                <Collapsible open={breakdownOpen} onOpenChange={setBreakdownOpen} className="mb-2">
+	              {/* Modal body */}
+	              <div className="px-6 py-5 flex flex-col gap-2 bg-[#fcfcfc]">
+	                <section className="rounded-2xl border border-[#e5e7eb] bg-[linear-gradient(180deg,#fbfbfc_0%,#ffffff_100%)] p-5 shadow-sm">
+	                  <div className="max-w-4xl">
+	                      <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-[#8b8b8b]">
+	                        Ask External AI
+	                      </div>
+	                      <h3 className="mt-2 text-lg font-semibold tracking-tight text-[#1f2937]">
+	                        Download an{' '}
+	                        <Tooltip>
+	                          <TooltipTrigger asChild>
+	                            <span className="cursor-help underline decoration-dotted underline-offset-4">
+	                              anonymized
+	                            </span>
+	                          </TooltipTrigger>
+	                          <TooltipContent side="top" sideOffset={8} className="max-w-[280px] px-3 py-2 text-[12px] leading-relaxed">
+	                            This export removes direct personal identifiers and replaces team names with generic references.
+	                          </TooltipContent>
+	                        </Tooltip>{' '}
+	                        research pack for ChatGPT or Claude
+	                      </h3>
+	                      <p className="mt-2 text-sm leading-6 text-[#667085]">
+	                        Export a markdown brief with this respondent&apos;s maturity profile, org and cohort
+	                        benchmarks, strengths, growth areas, suggested actions, and question-level answers.
+	                      </p>
+
+	                    <div className="mt-4 flex flex-wrap gap-2">
+	                      <button
+	                        type="button"
+	                        onClick={() =>
+	                          openExternalAi(
+	                            'https://chatgpt.com/g/g-6a1748e9d82c81918cc004536a458297-ai-maturity-index-analyst',
+	                          )
+	                        }
+	                        className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-[#e5e7eb] bg-white px-4 text-sm font-semibold text-[#242424] transition hover:border-[#d4d4d8] hover:bg-[#f8f8f9] focus:outline-none focus:ring-[3px] focus:ring-[#c7c7cc]/25"
+	                      >
+	                        <img src="/chatgpt-logo.svg" alt="" aria-hidden="true" className="h-4 w-4" />
+	                        Open ChatGPT
+	                      </button>
+
+	                      <button
+	                        type="button"
+	                        onClick={() => openExternalAi('https://claude.ai/')}
+	                        className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-[#e5e7eb] bg-white px-4 text-sm font-semibold text-[#242424] transition hover:border-[#d4d4d8] hover:bg-[#f8f8f9] focus:outline-none focus:ring-[3px] focus:ring-[#c7c7cc]/25"
+	                      >
+	                        <img src="/claude-logo.png" alt="" aria-hidden="true" className="h-4 w-4" />
+	                        Open Claude
+	                      </button>
+
+	                      <button
+	                        type="button"
+	                        onClick={downloadIndividualAiResearchPack}
+	                        disabled={isPreparingAiResearchPack || !selectedPersonResponse}
+	                        className="inline-flex h-11 items-center justify-center rounded-2xl border border-[#d4d4d8] bg-[#f5f5f5] px-5 text-sm font-semibold text-[#3f3f46] transition hover:border-[#c4c4c7] hover:bg-[#ededee] focus:outline-none focus:ring-[3px] focus:ring-[#c7c7cc]/25 disabled:cursor-wait disabled:opacity-70"
+	                      >
+	                        {isPreparingAiResearchPack ? 'Preparing AI research pack...' : 'Download AI research pack'}
+	                      </button>
+	                    </div>
+	                  </div>
+	                </section>
+
+	                {/* Person Maturity Map (collapsible) */}
+	                <Collapsible open={breakdownOpen} onOpenChange={setBreakdownOpen} className="mt-3 mb-2">
                   <CollapsibleTrigger
                     className={`flex w-full items-center justify-between border border-[#eaeaea] bg-[#f4f4f5]/60 p-3 hover:bg-[#f4f4f5] transition-colors ${
                       breakdownOpen ? 'rounded-t-lg border-b-0' : 'rounded-lg'
@@ -856,201 +1190,251 @@ export default function IndividualView() {
                   </CollapsibleTrigger>
                   <CollapsibleContent>
                     <div className="rounded-b-lg border border-[#eaeaea] bg-white p-4">
+                      <div className="flex flex-wrap gap-2">
+                        {(Object.keys(personMapSeriesMeta) as PersonMapSeriesKey[]).map((seriesKey) => {
+                          const series = personMapSeriesMeta[seriesKey];
+                          const isHidden = hiddenPersonMapSeries.includes(seriesKey);
+
+                          return (
+                            <Tooltip key={seriesKey}>
+                              <TooltipTrigger asChild>
+                                <button
+                                  type="button"
+                                  onClick={() => togglePersonMapSeries(seriesKey)}
+                                  className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                                    isHidden
+                                      ? 'border-[#e5e7eb] bg-white text-[#9ca3af]'
+                                      : 'border-[#e5e7eb] bg-[#fafafa] text-[#374151] hover:bg-[#f5f5f5]'
+                                  }`}
+                                  aria-pressed={!isHidden}
+                                >
+                                  <span
+                                    className="h-2.5 w-2.5 rounded-full"
+                                    style={{ backgroundColor: series.color, opacity: isHidden ? 0.35 : 1 }}
+                                  />
+                                  <span className={isHidden ? 'line-through' : ''}>{series.label}</span>
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent side="top" sideOffset={8} className="px-3 py-2 text-[11px] leading-relaxed">
+                                <div className="font-medium text-white">{series.label}</div>
+                                <div className="mt-1 text-white/80">
+                                  Click to {isHidden ? 'show' : 'hide'} this comparison series.
+                                </div>
+                              </TooltipContent>
+                            </Tooltip>
+                          );
+                        })}
+                      </div>
                       <div className="h-[340px]">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <RadarChart
-                            data={(() => {
-                              const peers = individuals.filter((i) => {
-                                if (i.id === selectedPerson.id) return false;
-                                return i.role === selectedPerson.role;
-                              });
-                              return TECH_DIMENSIONS.map((dim) => {
-                                const peerAverage =
-                                  peers.length > 0
-                                    ? peers.reduce((sum, p) => sum + p.scores[dim], 0) / peers.length
-                                    : 1;
-
-                                const adjustedPeerAverage =
-                                  selectedPerson.role === 'Engineer' && dim === 'Impact'
-                                    ? 3.2
-                                    : selectedPerson.role === 'Engineer' && dim === 'Culture'
-                                    ? 3.9
-                                    : peerAverage;
-
-                                return {
-                                  dimension: dim,
-                                  you: selectedPerson.scores[dim],
-                                  peers: adjustedPeerAverage,
-                                };
-                              });
-                            })()}
-                            outerRadius="70%"
-                          >
-                            <PolarGrid stroke="rgb(229,229,229)" />
-                            <PolarAngleAxis
-                              dataKey="dimension"
-                              tick={{ fontSize: 12, fill: '#737373' }}
-                            />
-                            <PolarRadiusAxis
-                              domain={[1, MAX_DIMENSION_SCORE]}
-                              ticks={Array.from({ length: MAX_DIMENSION_SCORE }, (_, idx) => idx + 1)}
-                              tick={{ fontSize: 9, fill: '#b0b0b0' }}
-                              axisLine={false}
-                            />
-                            <RechartsTooltip
-                              isAnimationActive={false}
-                              cursor={{ stroke: '#14b8a6', strokeWidth: 1, strokeDasharray: '3 3' }}
-                              contentStyle={{
-                                backgroundColor: '#242424',
-                                border: 'none',
-                                borderRadius: '6px',
-                                padding: '6px 12px',
-                                color: '#ffffff',
-                                fontSize: '12px',
-                              }}
-                              labelStyle={{ color: '#ffffff', fontWeight: 600, marginBottom: 2 }}
-                              itemStyle={{ color: '#ffffff' }}
-                              formatter={(value, name) => {
-                                const num = Number(value);
-                                const lvl = scoreToLevel(num);
-                                return [`${num.toFixed(1)} — ${LEVEL_LABELS[lvl]}`, name];
-                              }}
-                            />
-                            <Legend
-                              layout="vertical"
-                              align="right"
-                              verticalAlign="middle"
-                              wrapperStyle={{ fontSize: '12px', paddingLeft: '16px' }}
-                              iconType="circle"
-                            />
-                            <Radar
-                              name={`Avg ${selectedPerson.role}s`}
-                              dataKey="peers"
-                              stroke="#94a3b8"
-                              fill="#94a3b8"
-                              fillOpacity={0}
-                              strokeWidth={1.5}
-                              dot={{ r: 5, fill: '#94a3b8', fillOpacity: 1, strokeWidth: 0 }}
-                              isAnimationActive={false}
-                            />
-                            <Radar
-                              name={selectedPerson.name}
-                              dataKey="you"
-                              stroke="#14b8a6"
-                              fill="#14b8a6"
-                              fillOpacity={personMapFillOpacity}
-                              strokeWidth={personMapStrokeWidth}
-                              isAnimationActive={false}
-                              dot={
-                                ((props: { cx?: number; cy?: number }) => {
-                                  const { cx = 0, cy = 0 } = props;
-                                  const size = 10;
-                                  return (
-                                    <rect
-                                      x={cx - size / 2}
-                                      y={cy - size / 2}
-                                      width={size}
-                                      height={size}
-                                      fill="#14b8a6"
-                                    />
-                                  );
-                                }) as unknown as never
-                              }
-                              label={
-                                ((props: { x?: number; y?: number; index?: number; value?: number }) => {
-                                  const { x = 0, y = 0, index = 0, value = 0 } = props;
-                                  // 5 dimensions arranged clockwise from the top.
-                                  // Push each label outward in its natural direction.
-                                  const offset = 14;
-                                  let lx = x;
-                                  let ly = y;
-                                  let textAnchor: 'start' | 'middle' | 'end' = 'middle';
-                                  let baseline: 'auto' | 'middle' | 'hanging' = 'middle';
-                                  switch (index) {
-                                    case 0: // Usage — top
-                                      ly = y - offset;
-                                      baseline = 'auto';
-                                      break;
-                                    case 1: // Skills — upper-right
-                                      lx = x + offset;
-                                      ly = y - offset * 0.35;
-                                      textAnchor = 'start';
-                                      break;
-                                    case 2: // Impact — lower-right
-                                      lx = x + offset * 0.7;
-                                      ly = y + offset * 0.85;
-                                      textAnchor = 'start';
-                                      baseline = 'hanging';
-                                      break;
-                                    case 3: // Culture — lower-left
-                                      lx = x - offset * 0.7;
-                                      ly = y + offset * 0.85;
-                                      textAnchor = 'end';
-                                      baseline = 'hanging';
-                                      break;
-                                    case 4: // Vision — upper-left
-                                      lx = x - offset;
-                                      ly = y - offset * 0.35;
-                                      textAnchor = 'end';
-                                      break;
+                        {visiblePersonMapSeries.length > 0 ? (
+                          <ResponsiveContainer width="100%" height="100%">
+                            <RadarChart data={personMapData} outerRadius="70%">
+                              <PolarGrid stroke="rgb(229,229,229)" />
+                              <PolarAngleAxis
+                                dataKey="dimension"
+                                tick={{ fontSize: 12, fill: '#737373' }}
+                              />
+                              <PolarRadiusAxis
+                                domain={[1, MAX_DIMENSION_SCORE]}
+                                ticks={Array.from({ length: MAX_DIMENSION_SCORE }, (_, idx) => idx + 1)}
+                                tick={{ fontSize: 9, fill: '#b0b0b0' }}
+                                axisLine={false}
+                              />
+                              <RechartsTooltip
+                                isAnimationActive={false}
+                                cursor={{ stroke: '#14b8a6', strokeWidth: 1, strokeDasharray: '3 3' }}
+                                contentStyle={{
+                                  backgroundColor: '#242424',
+                                  border: 'none',
+                                  borderRadius: '6px',
+                                  padding: '6px 12px',
+                                  color: '#ffffff',
+                                  fontSize: '12px',
+                                }}
+                                labelStyle={{ color: '#ffffff', fontWeight: 600, marginBottom: 2 }}
+                                itemStyle={{ color: '#ffffff' }}
+                                formatter={(value, name) => {
+                                  const num = Number(value);
+                                  const lvl = scoreToLevel(num);
+                                  return [`${num.toFixed(1)} — ${LEVEL_LABELS[lvl]}`, name];
+                                }}
+                              />
+                              <Legend
+                                layout="vertical"
+                                align="right"
+                                verticalAlign="middle"
+                                wrapperStyle={{ fontSize: '12px', paddingLeft: '16px' }}
+                                iconType="circle"
+                              />
+                              {!hiddenPersonMapSeries.includes('roleAverage') && roleAverageScores ? (
+                                <Radar
+                                  name={roleBenchmarkLabel}
+                                  dataKey="roleAverage"
+                                  stroke={roleBenchmarkColor}
+                                  fill={roleBenchmarkColor}
+                                  fillOpacity={0}
+                                  strokeWidth={1.5}
+                                  dot={{ r: 5, fill: roleBenchmarkColor, fillOpacity: 1, strokeWidth: 0 }}
+                                  isAnimationActive={false}
+                                />
+                              ) : null}
+                              {!hiddenPersonMapSeries.includes('teamAverage') && teamAverageScores ? (
+                                <Radar
+                                  name={teamBenchmarkLabel}
+                                  dataKey="teamAverage"
+                                  stroke={teamBenchmarkColor}
+                                  fill={teamBenchmarkColor}
+                                  fillOpacity={0}
+                                  strokeWidth={1.5}
+                                  strokeDasharray="6 4"
+                                  dot={{ r: 5, fill: teamBenchmarkColor, fillOpacity: 1, strokeWidth: 0 }}
+                                  isAnimationActive={false}
+                                />
+                              ) : null}
+                              {!hiddenPersonMapSeries.includes('person') ? (
+                                <Radar
+                                  name={selectedPerson.name}
+                                  dataKey="you"
+                                  stroke={personColor}
+                                  fill={personColor}
+                                  fillOpacity={personMapFillOpacity}
+                                  strokeWidth={personMapStrokeWidth}
+                                  isAnimationActive={false}
+                                  dot={
+                                    ((props: { cx?: number; cy?: number }) => {
+                                      const { cx = 0, cy = 0 } = props;
+                                      const size = 10;
+                                      return (
+                                        <rect
+                                          x={cx - size / 2}
+                                          y={cy - size / 2}
+                                          width={size}
+                                          height={size}
+                                          fill={personColor}
+                                        />
+                                      );
+                                    }) as unknown as never
                                   }
-                                  return (
-                                    <text
-                                      x={lx}
-                                      y={ly}
-                                      fill="#14b8a6"
-                                      fontSize={13}
-                                      fontWeight={600}
-                                      textAnchor={textAnchor}
-                                      dominantBaseline={baseline}
-                                    >
-                                      {Number(value).toFixed(1)}
-                                    </text>
-                                  );
-                                }) as unknown as never
-                              }
-                            />
-                          </RadarChart>
-                        </ResponsiveContainer>
+                                  label={
+                                    ((props: { x?: number; y?: number; index?: number; value?: number }) => {
+                                      const { x = 0, y = 0, index = 0, value = 0 } = props;
+                                      const offset = 14;
+                                      let lx = x;
+                                      let ly = y;
+                                      let textAnchor: 'start' | 'middle' | 'end' = 'middle';
+                                      let baseline: 'auto' | 'middle' | 'hanging' = 'middle';
+                                      switch (index) {
+                                        case 0:
+                                          ly = y - offset;
+                                          baseline = 'auto';
+                                          break;
+                                        case 1:
+                                          lx = x + offset;
+                                          ly = y - offset * 0.35;
+                                          textAnchor = 'start';
+                                          break;
+                                        case 2:
+                                          lx = x + offset * 0.7;
+                                          ly = y + offset * 0.85;
+                                          textAnchor = 'start';
+                                          baseline = 'hanging';
+                                          break;
+                                        case 3:
+                                          lx = x - offset * 0.7;
+                                          ly = y + offset * 0.85;
+                                          textAnchor = 'end';
+                                          baseline = 'hanging';
+                                          break;
+                                        case 4:
+                                          lx = x - offset;
+                                          ly = y - offset * 0.35;
+                                          textAnchor = 'end';
+                                          break;
+                                      }
+                                      return (
+                                        <text
+                                          x={lx}
+                                          y={ly}
+                                          fill={personColor}
+                                          fontSize={13}
+                                          fontWeight={600}
+                                          textAnchor={textAnchor}
+                                          dominantBaseline={baseline}
+                                        >
+                                          {Number(value).toFixed(1)}
+                                        </text>
+                                      );
+                                    }) as unknown as never
+                                  }
+                                />
+                              ) : null}
+                            </RadarChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-[#d4d4d8] bg-[#fafafa] px-6 text-center text-sm text-[#7a7a7a]">
+                            All comparison series are hidden. Click a chip above to show them again.
+                          </div>
+                        )}
                       </div>
                     </div>
                   </CollapsibleContent>
                 </Collapsible>
 
-                {/* Vs Org Average (collapsible) */}
-                <Collapsible open={comparisonOpen} onOpenChange={setComparisonOpen} className="mb-2">
-                  <CollapsibleTrigger
-                    className={`flex w-full items-center justify-between border border-[#eaeaea] bg-[#f4f4f5]/60 p-3 hover:bg-[#f4f4f5] transition-colors ${
-                      comparisonOpen ? 'rounded-t-lg border-b-0' : 'rounded-lg'
-                    }`}
-                  >
-                    <span className="font-medium text-[#242424]">
-                      Benchmark Breakdown
-                    </span>
-                    <ChevronDown
-                      className={`h-4 w-4 text-[#8b8b8b] transition-transform ${comparisonOpen ? 'rotate-180' : ''}`}
-                    />
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <div className="rounded-b-lg border border-[#eaeaea] bg-white p-4">
-                      <DimensionComparison
-                        personScores={selectedPerson.scores}
-                        benchmarkScores={orgAvgScores}
-                        personName={selectedPerson.name}
-                        personColor={personColor}
-                        benchmarkLabel="Org Average"
-                      />
-                    </div>
-                  </CollapsibleContent>
-                </Collapsible>
+	                <Collapsible open={gapsOpen} onOpenChange={setGapsOpen} className="mb-2">
+	                  <CollapsibleTrigger
+	                    className={`flex w-full items-center justify-between border border-[#eaeaea] bg-[#f4f4f5]/60 p-3 hover:bg-[#f4f4f5] transition-colors ${
+	                      gapsOpen ? 'rounded-t-lg border-b-0' : 'rounded-lg'
+	                    }`}
+	                  >
+	                    <span className="font-medium text-[#242424]">Top-3 biggest gaps</span>
+	                    <ChevronDown
+	                      className={`h-4 w-4 text-[#8b8b8b] transition-transform ${gapsOpen ? 'rotate-180' : ''}`}
+	                    />
+	                  </CollapsibleTrigger>
+	                  <CollapsibleContent>
+	                    <div className="rounded-b-lg border border-[#eaeaea] bg-white p-6 shadow-sm">
+	                      <p className="text-sm text-[#7a7a7a]">
+	                        The largest negative deltas against current benchmarks across organization, same-role peers, and current team scope.
+	                      </p>
+
+	                      <div className="mt-5 space-y-3">
+	                        {biggestGaps.length > 0 ? (
+	                          biggestGaps.map((gap) => (
+	                            <div key={`${gap.dimension}-${gap.benchmarkLabel}`} className="rounded-2xl border border-[#fcd34d] bg-[#fffbeb] p-4">
+	                              <div className="flex items-start justify-between gap-3">
+	                                <div>
+	                                  <div className="text-xs font-semibold uppercase tracking-[0.14em] text-[#b45309]">
+	                                    {gap.dimension}
+	                                  </div>
+	                                  <div className="mt-1 text-sm font-medium text-[#242424]">
+	                                    Below {gap.benchmarkLabel}
+	                                  </div>
+	                                  <div className="mt-1 text-sm text-[#92400e]">
+	                                    {gap.personScore.toFixed(1)} vs {gap.benchmarkScore.toFixed(1)}
+	                                    {' '}across {gap.respondentCount} respondents
+	                                  </div>
+	                                </div>
+	                                <span className="inline-flex rounded-full bg-[#fef3c7] px-3 py-1 text-sm font-semibold text-[#b45309]">
+	                                  {formatSignedDelta(gap.delta)}
+	                                </span>
+	                              </div>
+	                            </div>
+	                          ))
+	                        ) : (
+	                          <div className="rounded-2xl border border-dashed border-[#d4d4d8] bg-[#fafafa] px-5 py-8 text-center text-sm text-[#7a7a7a]">
+	                            No negative gaps are standing out against the currently available benchmarks.
+	                          </div>
+	                        )}
+	                      </div>
+	                    </div>
+	                  </CollapsibleContent>
+	                </Collapsible>
 
                 {/* Survey answers (collapsible) */}
                 {(() => {
-                  const response = rawResponses.find(
-                    (r) => r.username.split('@')[0] === selectedPerson.id,
-                  );
-                  if (!response) return null;
-                  const scoredResponse = computeScores(response);
+                  const response = selectedPersonResponse;
+                  const scoredResponse = selectedPersonScoredResponse;
+                  if (!response || !scoredResponse) return null;
                   const questions = getQuestionsForSurveyType(response.surveyType);
 
                   // Group questions by dimension
