@@ -25,3 +25,4 @@ dist-ssr
 
 #
 src/data/survey/raw
+.agents/skills/reference-reuse
