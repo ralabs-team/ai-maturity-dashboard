@@ -4,10 +4,17 @@ import { ChevronDown } from 'lucide-react';
 import PageHeader from '../components/layout/PageHeader';
 import FloatingSectionNav from '../components/layout/FloatingSectionNav';
 import { useNavigationPending } from '../components/layout/NavigationPendingContext';
+import { useSensitiveData } from '../components/privacy/SensitiveDataContext';
+import {
+  AI_CHAMPION_SCORE_THRESHOLD,
+  buildChampionRows,
+} from '../components/organization/ChampionVisibilityOptions';
+import TeamChampionsSection from '../components/team/TeamChampionsSection';
 import TeamGapInsightsSection from '../components/team/TeamGapInsightsSection';
 import TeamMaturityMapSection from '../components/team/TeamMaturityMapSection';
 import TeamMembersSection from '../components/team/TeamMembersSection';
 import TeamSummarySection from '../components/team/TeamSummarySection';
+import SensitiveText from '../components/ui/SensitiveText';
 import {
   LEVEL_COLORS,
   TEAM_MAP_DIMENSIONS,
@@ -27,12 +34,10 @@ import {
 } from '../components/team/teamViewShared';
 import { useSurveyData } from '../data/survey/SurveyDataContext';
 import {
-  buildRiskGovernanceHotspotRows,
-  buildSupportDemandSkillsGapRows,
-  buildToolAccessConstraintRows,
-  buildUsageImpactQuadrant,
-  buildUsageImpactQuadrantSummary,
-  buildWorkflowTransformationGapRows,
+  buildScopedTeamSupportDemandPoints,
+  buildScopedToolAccessPoints,
+  buildScopedUsageImpactPoints,
+  buildScopedWorkflowTransformationPoints,
 } from '../data/survey/gapInsights';
 import { allProjectsList, computeCompositeQuestionScore, type RawResponse } from '../data/survey/scoring';
 import { LEVEL_LABELS, scoreToLevel } from '../data/types';
@@ -716,6 +721,7 @@ function buildDerivedScopeBundle(
 export default function TeamView() {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { isSensitiveDataHidden } = useSensitiveData();
   const { individuals, rawResponses, resolvePersonName } = useSurveyData();
   const { clearPendingNavigation } = useNavigationPending();
   const [selectedScopeType, setSelectedScopeType] = useState<ScopeType>(() =>
@@ -866,6 +872,28 @@ export default function TeamView() {
         : allProjectsList(response.projects).includes(selectedScopeName),
     );
   }, [rawResponses, selectedScopeName, selectedScopeType]);
+  const comparisonScopeIndividuals = useMemo(() => {
+    if (!selectedScopeName) {
+      return [] as typeof individuals;
+    }
+
+    return individuals.filter((person) =>
+      selectedScopeType === 'department'
+        ? person.department.trim() !== selectedScopeName
+        : !person.allProjects.includes(selectedScopeName),
+    );
+  }, [individuals, selectedScopeName, selectedScopeType]);
+  const comparisonScopeResponses = useMemo(() => {
+    if (!selectedScopeName) {
+      return [] as RawResponse[];
+    }
+
+    return rawResponses.filter((response) =>
+      selectedScopeType === 'department'
+        ? response.department.trim() !== selectedScopeName
+        : !allProjectsList(response.projects).includes(selectedScopeName),
+    );
+  }, [rawResponses, selectedScopeName, selectedScopeType]);
 
   if (realTeamData.length === 0) {
     return (
@@ -940,29 +968,6 @@ export default function TeamView() {
       label: `Selected ${scopeLabelLower}`,
     },
   } satisfies Record<TeamMapSeriesKey, { color: string; fill: string; label: string }>;
-  const peerGapInsights = useMemo(
-    () => ({
-      usageImpactByDepartment: buildUsageImpactQuadrant(individuals, 'department'),
-      usageImpactByTeam: buildUsageImpactQuadrant(individuals, 'team'),
-      supportDemandDepartmentRows: buildSupportDemandSkillsGapRows(rawResponses, 'department'),
-      supportDemandTeamRows: buildSupportDemandSkillsGapRows(rawResponses, 'team'),
-      toolAccessDepartmentRows: buildToolAccessConstraintRows(rawResponses, 'department'),
-      toolAccessTeamRows: buildToolAccessConstraintRows(rawResponses, 'team'),
-      workflowDepartmentRows: buildWorkflowTransformationGapRows(rawResponses, 'department'),
-      workflowTeamRows: buildWorkflowTransformationGapRows(rawResponses, 'team'),
-      riskDepartmentRows: buildRiskGovernanceHotspotRows(rawResponses, 'department'),
-      riskTeamRows: buildRiskGovernanceHotspotRows(rawResponses, 'team'),
-    }),
-    [individuals, rawResponses],
-  );
-  const peerUsageImpactData =
-    selectedScopeType === 'team'
-      ? peerGapInsights.usageImpactByTeam
-      : peerGapInsights.usageImpactByDepartment;
-  const peerUsageImpactSummary = useMemo(
-    () => buildUsageImpactQuadrantSummary(peerUsageImpactData),
-    [peerUsageImpactData],
-  );
 
   const selectedTeamMembers = realTeamMemberData[selectedTeam.id] ?? [];
   const sortedSelectedTeamMembers = useMemo(() => {
@@ -1002,6 +1007,48 @@ export default function TeamView() {
     (member) => (member.levelNumber ?? 0) >= 4,
   ).length;
   const selectedTeamResponseCount = selectedTeamMembers.length || selectedTeam.respondents;
+  const scopedGapInsights = useMemo(
+    () => ({
+      usageImpactData: buildScopedUsageImpactPoints(selectedScopeIndividuals, selectedScopeResponses),
+      comparisonUsageImpactData: buildScopedUsageImpactPoints(
+        comparisonScopeIndividuals,
+        comparisonScopeResponses,
+      ),
+      supportDemandRows: buildScopedTeamSupportDemandPoints(
+        selectedScopeIndividuals,
+        selectedScopeResponses,
+      ),
+      toolAccessRows: buildScopedToolAccessPoints(selectedScopeIndividuals, selectedScopeResponses),
+      workflowRows: buildScopedWorkflowTransformationPoints(
+        selectedScopeIndividuals,
+        selectedScopeResponses,
+      ),
+    }),
+    [
+      comparisonScopeIndividuals,
+      comparisonScopeResponses,
+      selectedScopeIndividuals,
+      selectedScopeResponses,
+    ],
+  );
+  const selectedScopeChampionRows = useMemo(
+    () =>
+      buildChampionRows(selectedScopeIndividuals)
+        .filter((row) => row.championScore >= AI_CHAMPION_SCORE_THRESHOLD)
+        .slice(0, 10),
+    [selectedScopeIndividuals],
+  );
+  const selectedScopeChampionShare = useMemo(() => {
+    if (selectedScopeIndividuals.length === 0) {
+      return 0;
+    }
+
+    const championCount = buildChampionRows(selectedScopeIndividuals).filter(
+      (row) => row.championScore >= AI_CHAMPION_SCORE_THRESHOLD,
+    ).length;
+
+    return (championCount / selectedScopeIndividuals.length) * 100;
+  }, [selectedScopeIndividuals]);
 
   const getAiResearchPack = async (): Promise<AiResearchPack> => {
     if (aiResearchPackRef.current) {
@@ -1084,6 +1131,13 @@ export default function TeamView() {
     window.open(url, '_blank', 'noopener,noreferrer');
   };
 
+  const jumpToAiChampions = () => {
+    document.getElementById('team-ai-champions')?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start',
+    });
+  };
+
   const toggleTeamMemberSort = (key: TeamMemberSortKey) => {
     setTeamMemberSort((current) => ({
       key,
@@ -1162,7 +1216,9 @@ export default function TeamView() {
                   <span className="flex h-7 w-7 shrink-0 select-none items-center justify-center rounded-full bg-gradient-to-br from-green-500 to-emerald-500 text-[10px] font-semibold text-white">
                     {teamBadgeLabel(selectedTeam.name)}
                   </span>
-                  <span className="truncate">{selectedTeam.name}</span>
+                  <SensitiveText as="span" hidden={isSensitiveDataHidden} className="truncate">
+                    {selectedTeam.name}
+                  </SensitiveText>
                 </span>
                 <ChevronDown className="h-4 w-4 shrink-0 text-[#8b8b8b]" />
               </button>
@@ -1200,7 +1256,9 @@ export default function TeamView() {
                           <span className="flex h-7 w-7 shrink-0 select-none items-center justify-center rounded-full bg-gradient-to-br from-green-500 to-emerald-500 text-[10px] font-semibold text-white">
                             {teamBadgeLabel(team.name)}
                           </span>
-                          <span className="truncate">{team.name}</span>
+                          <SensitiveText as="span" hidden={isSensitiveDataHidden} className="truncate">
+                            {team.name}
+                          </SensitiveText>
                           <span className="ml-auto whitespace-nowrap text-xs text-[#8b8b8b]">
                             {team.respondents} responses
                           </span>
@@ -1226,8 +1284,10 @@ export default function TeamView() {
         selectedTeamLevelNumber={selectedTeamLevelNumber}
         selectedTeamOverallScore={selectedTeamOverallScore}
         selectedTeamResponseCount={selectedTeamResponseCount}
+        aiChampionShare={selectedScopeChampionShare}
         isPreparingAiResearchPack={isPreparingAiResearchPack}
         onDownloadAiResearchPack={downloadAiResearchPack}
+        onJumpToAiChampions={jumpToAiChampions}
         onOpenExternalAi={openExternalAi}
       />
 
@@ -1248,18 +1308,18 @@ export default function TeamView() {
       />
 
       <TeamGapInsightsSection
-        scopeType={selectedScopeType}
+        scopeLabelLower={scopeLabelLower}
         selectedScopeName={selectedScopeName}
-        usageImpactData={peerUsageImpactData}
-        usageImpactSummary={peerUsageImpactSummary}
-        supportDemandDepartmentRows={peerGapInsights.supportDemandDepartmentRows}
-        supportDemandTeamRows={peerGapInsights.supportDemandTeamRows}
-        toolAccessDepartmentRows={peerGapInsights.toolAccessDepartmentRows}
-        toolAccessTeamRows={peerGapInsights.toolAccessTeamRows}
-        workflowDepartmentRows={peerGapInsights.workflowDepartmentRows}
-        workflowTeamRows={peerGapInsights.workflowTeamRows}
-        riskDepartmentRows={peerGapInsights.riskDepartmentRows}
-        riskTeamRows={peerGapInsights.riskTeamRows}
+        usageImpactData={scopedGapInsights.usageImpactData}
+        comparisonUsageImpactData={scopedGapInsights.comparisonUsageImpactData}
+        supportDemandRows={scopedGapInsights.supportDemandRows}
+        toolAccessRows={scopedGapInsights.toolAccessRows}
+        workflowRows={scopedGapInsights.workflowRows}
+      />
+
+      <TeamChampionsSection
+        scopeLabelLower={scopeLabelLower}
+        championRows={selectedScopeChampionRows}
       />
 
       <TeamMembersSection

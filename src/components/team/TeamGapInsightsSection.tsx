@@ -12,23 +12,20 @@ import {
 } from '../charts/recharts';
 import TeamSectionHeader from './TeamSectionHeader';
 import type {
-  TeamRiskGovernancePoint,
   TeamSupportDemandPoint,
   TeamToolAccessPoint,
   TeamUsageImpactPoint,
   TeamWorkflowTransformationPoint,
-  UsageImpactSummaryItem,
 } from '../../data/survey/gapInsights';
 
 type TeamGapInsightsSectionProps = {
   scopeLabelLower: string;
   selectedScopeName: string;
   usageImpactData: TeamUsageImpactPoint[];
-  usageImpactSummary: UsageImpactSummaryItem[];
+  comparisonUsageImpactData: TeamUsageImpactPoint[];
   supportDemandRows: TeamSupportDemandPoint[];
   toolAccessRows: TeamToolAccessPoint[];
   workflowRows: TeamWorkflowTransformationPoint[];
-  riskRows: TeamRiskGovernancePoint[];
 };
 
 type ScatterBaseRow = {
@@ -38,6 +35,7 @@ type ScatterBaseRow = {
   level: string;
   color: string;
   size: number;
+  isComparison?: boolean;
 };
 
 type ScatterCardProps<Row extends ScatterBaseRow> = {
@@ -70,7 +68,7 @@ function MemberTooltip<Row extends ScatterBaseRow>({
 }) {
   const row = payload?.[0]?.payload;
 
-  if (!active || !row) {
+  if (!active || !row || row.isComparison) {
     return null;
   }
 
@@ -182,12 +180,16 @@ export default function TeamGapInsightsSection({
   scopeLabelLower,
   selectedScopeName,
   usageImpactData,
-  usageImpactSummary,
+  comparisonUsageImpactData,
   supportDemandRows,
   toolAccessRows,
   workflowRows,
-  riskRows,
 }: TeamGapInsightsSectionProps) {
+  const comparisonUsageImpactRows = comparisonUsageImpactData.map((row) => ({
+    ...row,
+    isComparison: true,
+  }));
+
   return (
     <section id="team-gap-signals" className="mt-8 scroll-mt-24">
       <TeamSectionHeader
@@ -205,28 +207,8 @@ export default function TeamGapInsightsSection({
             Usage vs Impact quadrant
           </h3>
           <p className="mt-1 text-sm text-[#7a7a7a]">
-            Plot people inside the selected {scopeLabelLower} by personal AI usage and personal impact, so you can spot strong champions, shallow adopters, and hidden high-impact outliers.
+            Plot people inside the selected {scopeLabelLower} by personal AI usage and personal impact, with the rest of the organization shown in gray for context.
           </p>
-
-          <div className="mt-4 grid gap-2 xl:grid-cols-4">
-            {usageImpactSummary.map((item) => (
-              <div key={item.key} className="rounded-xl border border-[#eaeaea] bg-[#fafafa] p-3 text-sm text-[#4b5563]">
-                <div className="font-medium text-[#242424]">{item.title}</div>
-                <div className="mt-2 flex items-baseline gap-2">
-                  <span className="text-[30px] font-semibold leading-none tracking-tight text-[#242424]">
-                    {item.share}%
-                  </span>
-                  <span className="text-[11px] font-medium uppercase tracking-[0.16em] text-[#8b8b8b]">
-                    of people
-                  </span>
-                </div>
-                <div className="mt-1 text-xs text-[#8b8b8b]">
-                  {item.count} {item.count === 1 ? 'person' : 'people'}
-                </div>
-                <div className="mt-2 text-[#6b7280]">{item.note}</div>
-              </div>
-            ))}
-          </div>
 
           <div className="relative mt-6 h-[320px]">
             <div className="pointer-events-none absolute left-4 top-3 z-10 rounded-full bg-white/90 px-3 py-1 text-[11px] font-medium text-[#475569] shadow-sm ring-1 ring-[#e5e7eb]">
@@ -293,6 +275,17 @@ export default function TeamGapInsightsSection({
                 />
                 <ReferenceLine x={3} stroke="#d4d4d8" strokeDasharray="4 4" />
                 <ReferenceLine y={3} stroke="#d4d4d8" strokeDasharray="4 4" />
+                <Scatter data={comparisonUsageImpactRows}>
+                  {comparisonUsageImpactRows.map((row) => (
+                    <Cell
+                      key={`comparison-${row.name}`}
+                      fill="#d1d5db"
+                      fillOpacity={0.65}
+                      stroke="#f8fafc"
+                      strokeWidth={1.5}
+                    />
+                  ))}
+                </Scatter>
                 <Scatter data={usageImpactData}>
                   {usageImpactData.map((row) => (
                     <Cell key={row.name} fill={row.color} stroke="#ffffff" strokeWidth={2.5} />
@@ -362,31 +355,9 @@ export default function TeamGapInsightsSection({
             xTickFormatter={(value) => `${value}h`}
             referenceX={3}
             referenceY={3}
-            renderDetails={(row) => [
+          renderDetails={(row) => [
               { label: 'Estimated hours saved', value: `${row.hoursSaved.toFixed(1)}h / week` },
               { label: 'Workflow transformation', value: `${row.transformation.toFixed(1)} / 5` },
-            ]}
-          />
-
-          <MemberScatterCard<TeamRiskGovernancePoint>
-            title="Risk and governance hotspots"
-            description={`See where safe handling is weak and governance-style blockers are concentrated inside the selected ${scopeLabelLower}.`}
-            rows={riskRows}
-            xKey="safetyScore"
-            yKey="governancePressure"
-            xLabel="Sensitive data handling safety"
-            yLabel="Governance blocker pressure"
-            xDomain={[1, 5]}
-            yDomain={[0, 100]}
-            xTicks={[1, 2, 3, 4, 5]}
-            yTicks={[0, 25, 50, 75, 100]}
-            yTickFormatter={(value) => `${value}%`}
-            referenceX={3}
-            referenceY={50}
-            renderDetails={(row) => [
-              { label: 'Safe handling score', value: `${row.safetyScore.toFixed(1)} / 5` },
-              { label: 'Governance blocker pressure', value: `${row.governancePressure.toFixed(1)}%` },
-              { label: 'Top blocker', value: row.blockerLabel ?? 'None / not stated' },
             ]}
           />
         </div>

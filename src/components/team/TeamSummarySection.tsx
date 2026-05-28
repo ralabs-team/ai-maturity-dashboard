@@ -1,3 +1,4 @@
+import { ArrowDown } from 'lucide-react';
 import { LEVEL_LABELS, type MaturityLevel } from '../../data/types';
 import { Tooltip as InfoTooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
 import TeamSectionHeader from './TeamSectionHeader';
@@ -9,8 +10,10 @@ type TeamSummarySectionProps = {
   selectedTeamLevelNumber: number;
   selectedTeamOverallScore: number;
   selectedTeamResponseCount: number;
+  aiChampionShare: number;
   isPreparingAiResearchPack: boolean;
   onDownloadAiResearchPack: () => void;
+  onJumpToAiChampions: () => void;
   onOpenExternalAi: (url: string) => void;
 };
 
@@ -20,8 +23,10 @@ export default function TeamSummarySection({
   selectedTeamLevelNumber,
   selectedTeamOverallScore,
   selectedTeamResponseCount,
+  aiChampionShare,
   isPreparingAiResearchPack,
   onDownloadAiResearchPack,
+  onJumpToAiChampions,
   onOpenExternalAi,
 }: TeamSummarySectionProps) {
   return (
@@ -49,21 +54,34 @@ export default function TeamSummarySection({
             value: String(selectedTeamLevel45Count),
             detail: `${formatPercent((selectedTeamLevel45Count / Math.max(selectedTeamResponseCount, 1)) * 100)} of team at advanced maturity`,
           },
+          {
+            title: 'AI champions',
+            value: formatPercent(aiChampionShare),
+            detail: 'High maturity, strong impact, and knowledge spread',
+            onClick: onJumpToAiChampions,
+          },
         ].map((card, index) => (
-          <div
+          <button
+            type="button"
             key={card.title}
+            onClick={card.onClick}
             className={`flex min-h-[126px] flex-col rounded-2xl shadow-sm ${
               index === 0
                 ? 'border border-[#1d4ed8]/20 bg-[linear-gradient(135deg,#0f766e_0%,#1d4ed8_100%)] px-5 py-4 text-white'
                 : 'border border-[#eaeaea] bg-white px-4 py-3'
-            }`}
+            } ${card.onClick ? 'text-left transition hover:border-[#d4d4d8] hover:bg-[#fafafa] focus:outline-none focus:ring-[3px] focus:ring-[#c7c7cc]/25' : 'text-left'}`}
           >
             <div
               className={`text-[11px] font-medium uppercase tracking-[0.14em] ${
                 index === 0 ? 'text-white/75' : 'text-[#8b8b8b]'
               }`}
             >
-              {card.title}
+              <span className="inline-flex items-center gap-1.5">
+                {card.title}
+                {card.onClick ? (
+                  <ArrowDown className={`h-3 w-3 ${index === 0 ? 'text-white/70' : 'text-[#9ca3af]'}`} />
+                ) : null}
+              </span>
             </div>
             <div className="mt-8 flex items-center gap-3">
               {card.hoverValue ? (
@@ -88,7 +106,7 @@ export default function TeamSummarySection({
             <div className={`mt-4 text-sm ${index === 0 ? 'text-white/80' : 'text-[#8b8b8b]'}`}>
               {card.detail}
             </div>
-          </div>
+          </button>
         ))}
       </div>
 

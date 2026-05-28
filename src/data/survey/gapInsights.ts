@@ -722,7 +722,7 @@ export function buildUsageImpactQuadrant(
 }
 
 export function buildUsageImpactQuadrantSummary(
-  data: UsageImpactPoint[],
+  data: Array<Pick<UsageImpactPoint, 'usage' | 'impact'> | Pick<TeamUsageImpactPoint, 'usage' | 'impact'>>,
 ): UsageImpactSummaryItem[] {
   const totals = {
     highHigh: 0,

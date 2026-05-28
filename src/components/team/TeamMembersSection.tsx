@@ -1,4 +1,6 @@
 import TeamSectionHeader from './TeamSectionHeader';
+import { useSensitiveData } from '../privacy/SensitiveDataContext';
+import SensitiveText from '../ui/SensitiveText';
 import {
   INDIVIDUAL_MEMBER_DIMENSIONS,
   initialsLabel,
@@ -9,6 +11,39 @@ import {
   type TeamMemberRecord,
   type TeamMemberSortKey,
 } from './teamViewShared';
+
+function splitNameParts(name: string): { firstName: string; remainder: string } {
+  const trimmedName = name.trim();
+  const firstSpaceIndex = trimmedName.indexOf(' ');
+
+  if (firstSpaceIndex === -1) {
+    return { firstName: trimmedName, remainder: '' };
+  }
+
+  return {
+    firstName: trimmedName.slice(0, firstSpaceIndex),
+    remainder: trimmedName.slice(firstSpaceIndex),
+  };
+}
+
+function PersonNameText({ name, hideSurname = false }: { name: string; hideSurname?: boolean }) {
+  const { firstName, remainder } = splitNameParts(name);
+
+  return (
+    <span title={hideSurname ? undefined : name}>
+      <span>{firstName || 'Unknown'}</span>
+      {remainder ? (
+        hideSurname ? (
+          <SensitiveText as="span" hidden className="inline-block">
+            {remainder}
+          </SensitiveText>
+        ) : (
+          <span>{remainder}</span>
+        )
+      ) : null}
+    </span>
+  );
+}
 
 type TeamMembersSectionProps = {
   scopeLabel: string;
@@ -25,6 +60,8 @@ export default function TeamMembersSection({
   onToggleSort,
   sortIndicator,
 }: TeamMembersSectionProps) {
+  const { isSensitiveDataHidden } = useSensitiveData();
+
   return (
     <section id="team-members" className="mt-8 scroll-mt-24">
       <TeamSectionHeader
@@ -68,7 +105,10 @@ export default function TeamMembersSection({
                       <div className="rounded-full bg-gradient-to-br from-teal-400 to-teal-600 flex h-8 w-8 shrink-0 items-center justify-center select-none text-[11px] font-semibold text-white">
                         {initialsLabel(member.name)}
                       </div>
-                      <span>{member.name}</span>
+                      <PersonNameText
+                        name={member.name}
+                        hideSurname={isSensitiveDataHidden}
+                      />
                     </div>
                   </td>
                   <td className="px-4 py-3 text-sm text-[#5b5b5b]">{member.role}</td>

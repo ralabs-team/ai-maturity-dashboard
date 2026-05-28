@@ -92,6 +92,7 @@ export const TEAM_SECTION_LINKS = [
   { id: 'team-top-summary', label: 'Top summary' },
   { id: 'team-maturity-map', label: 'Team maturity map' },
   { id: 'team-gap-signals', label: 'Where are the gaps?' },
+  { id: 'team-ai-champions', label: 'AI champions' },
   { id: 'team-members', label: 'Team members' },
 ] as const;
 
