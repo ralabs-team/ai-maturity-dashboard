@@ -335,7 +335,9 @@ export default function OrganizationDimensionCultureSection({
         subtitle="See whether AI practice is spreading, becoming team-owned, and turning into reusable habits instead of staying dependent on a few individual champions."
       />
 
-      <ChampionVisibilityOptions topChampionRows={topChampionRows} />
+      <div id="org-ai-champions" className="scroll-mt-24">
+        <ChampionVisibilityOptions topChampionRows={topChampionRows} />
+      </div>
 
       <StackedCard {...growthMomentum} />
       <StackedCard {...experimentationInitiative} />

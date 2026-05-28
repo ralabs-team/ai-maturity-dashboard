@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { X } from 'lucide-react';
+import { ArrowDown, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import {
   Bar,
@@ -36,7 +36,11 @@ import WorkflowTransformationGapCard from '../components/charts/organization/Wor
 import VisionToActionGapCard from '../components/charts/organization/VisionToActionGapCard';
 import CultureSpreadGapCard from '../components/charts/organization/CultureSpreadGapCard';
 import RiskGovernanceHotspotsCard from '../components/charts/organization/RiskGovernanceHotspotsCard';
-import { buildTopChampionRows } from '../components/organization/ChampionVisibilityOptions';
+import {
+  AI_CHAMPION_SCORE_THRESHOLD,
+  buildChampionRows,
+  buildTopChampionRows,
+} from '../components/organization/ChampionVisibilityOptions';
 import CompactUsageMultiSelect from '../components/organization/CompactUsageMultiSelect';
 import OrganizationDimensionCultureSection from '../components/organization/OrganizationDimensionCultureSection';
 import OrganizationDimensionImpactSection from '../components/organization/OrganizationDimensionImpactSection';
@@ -447,6 +451,7 @@ type SummaryCard = {
   delta?: string;
   deltaDetail?: string;
   hoverValue?: string;
+  onClick?: () => void;
 };
 
 type SurveyType = NonNullable<RawResponse['surveyType']>;
@@ -4817,6 +4822,20 @@ export default function OrganizationView() {
     [hiddenMaturityDistributionLevels, maturityDistribution],
   );
 
+  const championCount = useMemo(
+    () =>
+      buildChampionRows(individuals).filter(
+        (row) => row.championScore >= AI_CHAMPION_SCORE_THRESHOLD,
+      ).length,
+    [individuals],
+  );
+  const jumpToAiChampions = () => {
+    document.getElementById('org-ai-champions')?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start',
+    });
+  };
+
   const summaryCards = useMemo<SummaryCard[]>(() => {
     const respondentCount = individuals.length;
     const overallScore =
@@ -4833,6 +4852,8 @@ export default function OrganizationView() {
     ).length;
     const level45ProjectShare =
       projectCount > 0 ? Math.round((level45ProjectCount / projectCount) * 100) : 0;
+    const championShare =
+      respondentCount > 0 ? Math.round((championCount / respondentCount) * 100) : 0;
 
     return [
       {
@@ -4852,8 +4873,16 @@ export default function OrganizationView() {
         value: `${level45ProjectShare}%`,
         detail: `${level45ProjectCount} of ${projectCount} projects at advanced maturity`,
       },
+      {
+        title: 'AI champions',
+        value: `${championShare}%`,
+        detail: `${championCount} of ${respondentCount} ${
+          respondentCount === 1 ? 'respondent clears' : 'respondents clear'
+        } the champion threshold`,
+        onClick: jumpToAiChampions,
+      },
     ];
-  }, [individuals, projectRankingRows]);
+  }, [championCount, individuals, jumpToAiChampions, projectRankingRows]);
 
   const topChampionRows = useMemo(() => buildTopChampionRows(individuals), [individuals]);
 
@@ -6240,12 +6269,18 @@ export default function OrganizationView() {
 
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
           {summaryCards.map((card) => (
-            <div
+            <button
+              type="button"
               key={card.title}
+              onClick={card.onClick}
               className={
-                card.accent
+                `${card.accent
                   ? 'flex min-h-[126px] flex-col rounded-2xl bg-[linear-gradient(135deg,#0f766e_0%,#1d4ed8_100%)] px-5 py-4 text-white shadow-sm'
-                  : 'flex min-h-[126px] flex-col rounded-2xl border border-[#eaeaea] bg-white px-4 py-3 shadow-sm'
+                  : 'flex min-h-[126px] flex-col rounded-2xl border border-[#eaeaea] bg-white px-4 py-3 shadow-sm'} ${
+                  card.onClick
+                    ? 'text-left transition hover:border-[#d4d4d8] hover:bg-[#fafafa] focus:outline-none focus:ring-[3px] focus:ring-[#c7c7cc]/25'
+                    : 'text-left'
+                }`
               }
             >
               <div
@@ -6255,7 +6290,12 @@ export default function OrganizationView() {
                     : 'text-[11px] font-medium uppercase tracking-[0.14em] text-[#8b8b8b]'
                 }
               >
-                {card.title}
+                <span className="inline-flex items-center gap-1.5">
+                  {card.title}
+                  {card.onClick ? (
+                    <ArrowDown className={card.accent ? 'h-3 w-3 text-white/70' : 'h-3 w-3 text-[#9ca3af]'} />
+                  ) : null}
+                </span>
               </div>
               <div className="mt-8 flex items-center gap-3">
                 {card.hoverValue ? (
@@ -6307,7 +6347,7 @@ export default function OrganizationView() {
                   {card.deltaDetail}
                 </div>
               ) : null}
-            </div>
+            </button>
           ))}
         </div>
 
@@ -6595,11 +6635,18 @@ export default function OrganizationView() {
                     })),
                     { key: 'respondents' as const, label: 'Responses' },
                   ].map((header) => (
-                    <th key={header.key} className="px-4 py-3 font-medium">
+                    <th
+                      key={header.key}
+                      className={`px-4 py-3 font-medium ${
+                        header.key === 'department' ? 'w-[260px] min-w-[260px] max-w-[260px]' : ''
+                      }`}
+                    >
                       <button
                         type="button"
                         onClick={() => toggleHeatmapSort(header.key)}
-                        className="inline-flex items-center gap-1 transition-colors hover:text-[#525252]"
+                        className={`items-center gap-1 transition-colors hover:text-[#525252] ${
+                          header.key === 'department' ? 'flex w-full min-w-0' : 'inline-flex'
+                        }`}
                       >
                         <span>{header.label}</span>
                         <span className="text-[11px]">{sortIndicator(header.key)}</span>
@@ -6611,9 +6658,9 @@ export default function OrganizationView() {
               <tbody>
                 {visibleDimensionHeatmapRows.map((row) => (
                   <tr key={row.id} className="border-b border-[#eaeaea] last:border-b-0">
-                    <td className="px-4 py-3 font-medium text-[#242424]">
+                    <td className="w-[260px] min-w-[260px] max-w-[260px] px-4 py-3 font-medium text-[#242424]">
                       <div className="flex min-w-0 items-center gap-2">
-                        <span className="truncate">{row.department}</span>
+                        <span className="block flex-1 truncate">{row.department}</span>
                         <Link
                           to={`/teams?scope=department&scopeId=${row.id}`}
                           className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[#8b8b8b] transition-colors hover:bg-[#f5f5f5] hover:text-[#525252]"
