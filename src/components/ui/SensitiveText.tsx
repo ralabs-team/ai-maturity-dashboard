@@ -21,7 +21,7 @@ export default function SensitiveText({
       title={hidden ? undefined : title}
       className={cn(
         className,
-        hidden && 'select-none blur-[6px] transition-[filter] duration-150 ease-out',
+        hidden && 'select-none blur-[8px] opacity-30 transition-[filter,opacity] duration-150 ease-out',
       )}
     >
       {children}
