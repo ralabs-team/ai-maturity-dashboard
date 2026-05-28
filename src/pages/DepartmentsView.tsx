@@ -5,6 +5,7 @@ import { useSensitiveData } from '../components/privacy/SensitiveDataContext';
 import PersonAvatar from '../components/ui/PersonAvatar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip';
 import { useSurveyData } from '../data/survey/SurveyDataContext';
+import { allDepartmentsList } from '../data/survey/scoring';
 
 interface DepartmentRow {
   name: string;
@@ -46,26 +47,27 @@ export default function DepartmentsView() {
     >();
 
     for (const response of rawResponses) {
-      const departmentName = response.department.trim() || 'Unassigned';
       const respondentKey = response.username.trim().toLowerCase();
       const respondentName = resolvePersonName(response.username);
       const responseTimestamp = Number.isNaN(new Date(response.timestamp).getTime())
         ? 0
         : new Date(response.timestamp).getTime();
 
-      if (!departmentMembers.has(departmentName)) {
-        departmentMembers.set(departmentName, new Map());
-      }
+      for (const departmentName of allDepartmentsList(response.department)) {
+        if (!departmentMembers.has(departmentName)) {
+          departmentMembers.set(departmentName, new Map());
+        }
 
-      const currentDepartmentMembers = departmentMembers.get(departmentName);
-      const existingMember = currentDepartmentMembers?.get(respondentKey);
+        const currentDepartmentMembers = departmentMembers.get(departmentName);
+        const existingMember = currentDepartmentMembers?.get(respondentKey);
 
-      if (!existingMember || responseTimestamp >= existingMember.timestamp) {
-        currentDepartmentMembers?.set(respondentKey, {
-          id: respondentKey,
-          name: respondentName,
-          timestamp: responseTimestamp,
-        });
+        if (!existingMember || responseTimestamp >= existingMember.timestamp) {
+          currentDepartmentMembers?.set(respondentKey, {
+            id: respondentKey,
+            name: respondentName,
+            timestamp: responseTimestamp,
+          });
+        }
       }
     }
 

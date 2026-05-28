@@ -9,7 +9,13 @@ import {
 import { deriveIndividualsFromResponses } from '../individuals';
 import { deriveOrgAverageScores } from '../projects';
 import type { Individual, TechDimension } from '../types';
-import { nameFromEmail, renameProjectInProjectsField, type RawResponse } from './scoring';
+import {
+  allDepartmentsList,
+  nameFromEmail,
+  renameDepartmentInDepartmentsField,
+  renameProjectInProjectsField,
+  type RawResponse,
+} from './scoring';
 import {
   buildRawSurveyDatasets,
   getDefaultRawSurveyDataset,
@@ -167,6 +173,10 @@ function renameExactFieldValue(
     : currentValue;
 }
 
+function sanitizeDepartmentMemberships(rawValue: string): string {
+  return allDepartmentsList(rawValue).join(', ');
+}
+
 export function SurveyDataProvider({ children }: { children: ReactNode }) {
   const [csvOverrides, setCsvOverrides] = useState<SurveyCsvOverrides>(() => readStoredOverrides());
   const [personNameOverrides, setPersonNameOverrides] = useState<PersonNameOverrides>(() =>
@@ -311,7 +321,7 @@ export function SurveyDataProvider({ children }: { children: ReactNode }) {
           for (const dataset of rawSurveyDatasets) {
             const nextRows = dataset.rows.map((row) => {
               const currentDepartmentValue = row[SURVEY_DEPARTMENT_COLUMN_INDEX] ?? '';
-              const updatedDepartmentValue = renameExactFieldValue(
+              const updatedDepartmentValue = renameDepartmentInDepartmentsField(
                 currentDepartmentValue,
                 sanitizedPreviousName,
                 sanitizedNextName,
@@ -418,7 +428,7 @@ export function SurveyDataProvider({ children }: { children: ReactNode }) {
       },
       updatePersonDepartment: (username: string, nextDepartment: string) => {
         const normalizedUsername = username.trim().toLowerCase();
-        const sanitizedNextDepartment = nextDepartment.trim().replace(/\s+/g, ' ');
+        const sanitizedNextDepartment = sanitizeDepartmentMemberships(nextDepartment);
 
         if (!normalizedUsername || !sanitizedNextDepartment) {
           return;

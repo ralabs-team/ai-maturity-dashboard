@@ -45,6 +45,7 @@ export interface Individual {
   name: string;
   role: string;
   department: string;
+  allDepartments: string[];
   seniority: string;
   surveyType: SurveyType;
   roleType: RoleType;

@@ -5,7 +5,7 @@ import { useSensitiveData } from '../components/privacy/SensitiveDataContext';
 import PersonAvatar from '../components/ui/PersonAvatar';
 import SensitiveText from '../components/ui/SensitiveText';
 import { useSurveyData } from '../data/survey/SurveyDataContext';
-import { allProjectsList } from '../data/survey/scoring';
+import { allDepartmentsList, allProjectsList } from '../data/survey/scoring';
 
 type EditableField = 'name' | 'department' | 'projects';
 type SortKey = 'name' | 'department' | 'projects';
@@ -73,7 +73,7 @@ export default function OverviewPeopleView() {
       const nextRow: PersonDirectoryRow = {
         username: response.username,
         name: resolvePersonName(response.username),
-        department: response.department.trim() || 'Unassigned',
+        department: allDepartmentsList(response.department).join(', '),
         projects: normalizedProjects,
         timestamp: responseTimestamp,
       };
@@ -128,6 +128,8 @@ export default function OverviewPeopleView() {
     const sanitizedDraftValue =
       editing.field === 'projects'
         ? draftValue.trim().replace(/\s*,\s*/g, ', ')
+        : editing.field === 'department'
+          ? allDepartmentsList(draftValue).join(', ')
         : draftValue.trim().replace(/\s+/g, ' ');
 
     if (!sanitizedDraftValue) {

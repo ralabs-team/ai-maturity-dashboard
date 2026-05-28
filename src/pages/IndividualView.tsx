@@ -323,7 +323,10 @@ export default function IndividualView() {
     [individuals],
   );
   const allDepartmentNames = useMemo(
-    () => [...new Set(individuals.map((individual) => individual.department))].sort((a, b) => a.localeCompare(b)),
+    () =>
+      [...new Set(individuals.flatMap((individual) => individual.allDepartments))].sort((a, b) =>
+        a.localeCompare(b),
+      ),
     [individuals],
   );
   const individualCountByProject = useMemo(() => {
@@ -341,7 +344,9 @@ export default function IndividualView() {
     const counts = new Map<string, number>();
 
     for (const person of individuals) {
-      counts.set(person.department, (counts.get(person.department) ?? 0) + 1);
+      for (const department of person.allDepartments) {
+        counts.set(department, (counts.get(department) ?? 0) + 1);
+      }
     }
 
     return counts;
@@ -497,7 +502,7 @@ export default function IndividualView() {
 
     if (selectedDepartments.length > 0) {
       filtered = filtered.filter((person) =>
-        selectedDepartments.includes(person.department),
+        person.allDepartments.some((department) => selectedDepartments.includes(department)),
       );
     }
 

@@ -32,7 +32,7 @@ import {
 } from '../ui/sidebar';
 import { useSensitiveData } from '../privacy/SensitiveDataContext';
 import { useSurveyData } from '../../data/survey/SurveyDataContext';
-import { allProjectsList } from '../../data/survey/scoring';
+import { allDepartmentsList, allProjectsList } from '../../data/survey/scoring';
 import { useWorkspaceIdentity } from '../../data/workspace/WorkspaceIdentityContext';
 import { useNavigationPending } from './NavigationPendingContext';
 
@@ -120,14 +120,15 @@ export default function Sidebar() {
 
     for (const response of rawResponses) {
       const username = response.username.trim().toLowerCase();
-      const department = response.department.trim() || 'Unassigned';
       const seniority = response.seniority.trim() || 'Unassigned';
 
       if (username) {
         usernames.add(username);
       }
 
-      departments.add(department);
+      allDepartmentsList(response.department).forEach((department) => {
+        departments.add(department);
+      });
       seniorities.add(seniority);
 
       for (const project of allProjectsList(response.projects)) {

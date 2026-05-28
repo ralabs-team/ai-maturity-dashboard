@@ -40,7 +40,12 @@ import {
   buildScopedUsageImpactPoints,
   buildScopedWorkflowTransformationPoints,
 } from '../data/survey/gapInsights';
-import { allProjectsList, computeCompositeQuestionScore, type RawResponse } from '../data/survey/scoring';
+import {
+  allDepartmentsList,
+  allProjectsList,
+  computeCompositeQuestionScore,
+  type RawResponse,
+} from '../data/survey/scoring';
 import { LEVEL_LABELS, scoreToLevel } from '../data/types';
 
 const TEAM_MAP_COMPOSITE_QUESTION_KEYS: Record<
@@ -567,7 +572,7 @@ function buildDerivedScopeBundle(
         ? person.allProjects
             .map((project) => project.trim())
             .filter((project) => project && project.toLowerCase() !== 'n/a')
-        : [person.department.trim() || 'Unassigned'];
+        : person.allDepartments;
 
     for (const scopeName of scopes) {
       const existing = membersByScope.get(scopeName) ?? [];
@@ -858,7 +863,7 @@ export default function TeamView() {
 
     return individuals.filter((person) =>
       selectedScopeType === 'department'
-        ? person.department.trim() === selectedScopeName
+        ? person.allDepartments.includes(selectedScopeName)
         : person.allProjects.includes(selectedScopeName),
     );
   }, [individuals, selectedScopeName, selectedScopeType]);
@@ -869,7 +874,7 @@ export default function TeamView() {
 
     return rawResponses.filter((response) =>
       selectedScopeType === 'department'
-        ? response.department.trim() === selectedScopeName
+        ? allDepartmentsList(response.department).includes(selectedScopeName)
         : allProjectsList(response.projects).includes(selectedScopeName),
     );
   }, [rawResponses, selectedScopeName, selectedScopeType]);
@@ -880,7 +885,7 @@ export default function TeamView() {
 
     return individuals.filter((person) =>
       selectedScopeType === 'department'
-        ? person.department.trim() !== selectedScopeName
+        ? !person.allDepartments.includes(selectedScopeName)
         : !person.allProjects.includes(selectedScopeName),
     );
   }, [individuals, selectedScopeName, selectedScopeType]);
@@ -891,7 +896,7 @@ export default function TeamView() {
 
     return rawResponses.filter((response) =>
       selectedScopeType === 'department'
-        ? response.department.trim() !== selectedScopeName
+        ? !allDepartmentsList(response.department).includes(selectedScopeName)
         : !allProjectsList(response.projects).includes(selectedScopeName),
     );
   }, [rawResponses, selectedScopeName, selectedScopeType]);

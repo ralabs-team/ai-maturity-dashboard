@@ -50,6 +50,7 @@ import { Tooltip as InfoTooltip, TooltipContent, TooltipTrigger } from '../compo
 import { useSurveyData } from '../data/survey/SurveyDataContext';
 import type { SupportDemandSeriesKey } from '../data/survey/supportDemand';
 import {
+  allDepartmentsList,
   allProjectsList,
   computeCompositeQuestionScore,
   computeScores,
@@ -3210,7 +3211,8 @@ function filterUsageResponsesMulti(
 ) {
   return responses.filter((response) => {
     const matchesDepartment =
-      departments.length === 0 || departments.includes(response.department.trim());
+      departments.length === 0 ||
+      allDepartmentsList(response.department).some((department) => departments.includes(department));
     const matchesSeniority =
       seniorities.length === 0 || seniorities.includes(response.seniority.trim());
     const responseTeams = allProjectsList(response.projects);
@@ -3468,7 +3470,7 @@ function groupIndividualsByGapScope(
   for (const member of members) {
     const scopeNames =
       scope === 'department'
-        ? [member.department.trim()]
+        ? member.allDepartments
         : Array.from(
             new Set(
               member.allProjects
@@ -3497,7 +3499,7 @@ function groupResponsesByGapScope(
   for (const response of responses) {
     const scopeNames =
       scope === 'department'
-        ? [response.department.trim()]
+        ? allDepartmentsList(response.department)
         : Array.from(new Set(allProjectsList(response.projects).map((project) => project.trim()).filter(Boolean)));
 
     for (const scopeName of scopeNames) {
@@ -4622,15 +4624,11 @@ export default function OrganizationView() {
     const membersByDepartment = new Map<string, typeof individuals>();
 
     for (const person of individuals) {
-      const department = person.department.trim();
-
-      if (!department) {
-        continue;
+      for (const department of person.allDepartments) {
+        const existing = membersByDepartment.get(department) ?? [];
+        existing.push(person);
+        membersByDepartment.set(department, existing);
       }
-
-      const existing = membersByDepartment.get(department) ?? [];
-      existing.push(person);
-      membersByDepartment.set(department, existing);
     }
 
     return Array.from(membersByDepartment.entries())
@@ -4703,7 +4701,7 @@ export default function OrganizationView() {
     for (const person of individuals) {
       const scopes =
         usageImpactScope === 'department'
-          ? [person.department.trim()]
+          ? person.allDepartments
           : person.allProjects
               .map((project) => project.trim())
               .filter((project) => project && project.toLowerCase() !== 'n/a');
@@ -4934,11 +4932,7 @@ export default function OrganizationView() {
     () => [
       ALL_DEPARTMENTS,
       ...Array.from(
-        new Set(
-          rawResponses
-            .map((response) => response.department.trim())
-            .filter(Boolean),
-        ),
+        new Set(rawResponses.flatMap((response) => allDepartmentsList(response.department))),
       ).sort((left, right) => left.localeCompare(right)),
     ],
     [rawResponses],

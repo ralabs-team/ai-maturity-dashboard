@@ -1,6 +1,7 @@
 import type { Individual, RoleType, TechDimension } from './types';
 import { rawResponses } from './survey/responses';
 import {
+  allDepartmentsList,
   computeScores,
   nameFromEmail,
   primaryProject,
@@ -34,6 +35,7 @@ function deriveIndividual(
     name: resolvePersonName(r.username),
     role,
     department: r.department,
+    allDepartments: allDepartmentsList(r.department),
     seniority: r.seniority,
     surveyType: r.surveyType ?? 'delivery-engineering',
     roleType,

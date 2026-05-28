@@ -1,6 +1,6 @@
 import type { Individual } from '../types';
 import { LEVEL_LABELS, scoreToLevel } from '../types';
-import { allProjectsList, type RawResponse } from './scoring';
+import { allDepartmentsList, allProjectsList, type RawResponse } from './scoring';
 import type { SurveyType } from './scoring/shared';
 
 export type GapScope = 'department' | 'team';
@@ -157,7 +157,7 @@ function groupIndividualsByGapScope(
   for (const member of members) {
     const scopeNames =
       scope === 'department'
-        ? [member.department.trim()]
+        ? member.allDepartments
         : Array.from(
             new Set(
               member.allProjects
@@ -186,7 +186,7 @@ function groupResponsesByGapScope(
   for (const response of responses) {
     const scopeNames =
       scope === 'department'
-        ? [response.department.trim()]
+        ? allDepartmentsList(response.department)
         : Array.from(
             new Set(
               allProjectsList(response.projects)
