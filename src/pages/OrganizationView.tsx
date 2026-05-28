@@ -6638,7 +6638,7 @@ export default function OrganizationView() {
                     <th
                       key={header.key}
                       className={`px-4 py-3 font-medium ${
-                        header.key === 'department' ? 'w-[260px] min-w-[260px] max-w-[260px]' : ''
+                        header.key === 'department' ? 'w-[200px] min-w-[200px] max-w-[200px]' : ''
                       }`}
                     >
                       <button
@@ -6658,7 +6658,7 @@ export default function OrganizationView() {
               <tbody>
                 {visibleDimensionHeatmapRows.map((row) => (
                   <tr key={row.id} className="border-b border-[#eaeaea] last:border-b-0">
-                    <td className="w-[260px] min-w-[260px] max-w-[260px] px-4 py-3 font-medium text-[#242424]">
+                    <td className="w-[200px] min-w-[200px] max-w-[200px] px-4 py-3 font-medium text-[#242424]">
                       <div className="flex min-w-0 items-center gap-2">
                         <span className="block flex-1 truncate">{row.department}</span>
                         <Link
@@ -6695,7 +6695,10 @@ export default function OrganizationView() {
                     <td className="px-4 py-3 text-sm text-[#242424]">{formatScore(row.overall)}</td>
                     <td className="px-4 py-3 text-sm text-[#242424]">{formatLevelLabel(row.level)}</td>
                     {DIMENSION_KEYS.map((dimension) => (
-                      <td key={`${row.id}-${dimension}`} className="px-4 py-3 text-sm text-[#242424]">
+                      <td
+                        key={`${row.id}-${dimension}`}
+                        className="px-4 py-3 text-center text-sm text-[#242424]"
+                      >
                         <span
                           className={`inline-flex min-w-[3rem] items-center justify-center rounded-md px-2 py-1 font-medium ${lowScoreBadgeTone(row[dimension])}`}
                         >
@@ -6819,7 +6822,10 @@ export default function OrganizationView() {
                     <td className="px-4 py-3 text-sm text-[#242424]">{formatScore(project.overall)}</td>
                     <td className="px-4 py-3 text-sm text-[#242424]">{formatLevelLabel(project.level)}</td>
                     {DIMENSION_KEYS.map((dimension) => (
-                      <td key={`${project.id}-${dimension}`} className="px-4 py-3 text-sm text-[#242424]">
+                      <td
+                        key={`${project.id}-${dimension}`}
+                        className="px-4 py-3 text-center text-sm text-[#242424]"
+                      >
                         <span
                           className={`inline-flex min-w-[3rem] items-center justify-center rounded-md px-2 py-1 font-medium ${lowScoreBadgeTone(project.dimensions[dimension])}`}
                         >
