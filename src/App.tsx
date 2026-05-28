@@ -18,6 +18,7 @@ import TeamView from './pages/TeamView';
 import { SurveyDataProvider, useSurveyData } from './data/survey/SurveyDataContext';
 import { WorkspaceIdentityProvider } from './data/workspace/WorkspaceIdentityContext';
 import { TooltipProvider } from './components/ui/tooltip';
+import AppPasswordGate from './components/auth/AppPasswordGate';
 
 function AppRoutes() {
   const { hasResponseData } = useSurveyData();
@@ -61,30 +62,32 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <TooltipProvider delayDuration={0}>
-        <SurveyDataProvider>
-          <WorkspaceIdentityProvider>
-            <SensitiveDataProvider>
-              <SidebarProvider>
-                <NavigationPendingProvider>
-                  <Sidebar />
-                  <SidebarInset>
-                    <MobileHeader />
-                    <div data-app-scroll-container className="flex-1 overflow-auto">
-                      <div className="mx-auto max-w-[2000px] px-4 py-4 md:px-6 md:py-5">
-                        <AppRoutes />
+    <AppPasswordGate>
+      <BrowserRouter>
+        <TooltipProvider delayDuration={0}>
+          <SurveyDataProvider>
+            <WorkspaceIdentityProvider>
+              <SensitiveDataProvider>
+                <SidebarProvider>
+                  <NavigationPendingProvider>
+                    <Sidebar />
+                    <SidebarInset>
+                      <MobileHeader />
+                      <div data-app-scroll-container className="flex-1 overflow-auto">
+                        <div className="mx-auto max-w-[2000px] px-4 py-4 md:px-6 md:py-5">
+                          <AppRoutes />
+                        </div>
                       </div>
-                    </div>
-                    <AppFooter />
-                  </SidebarInset>
-                  <WorkspaceIdentityModal />
-                </NavigationPendingProvider>
-              </SidebarProvider>
-            </SensitiveDataProvider>
-          </WorkspaceIdentityProvider>
-        </SurveyDataProvider>
-      </TooltipProvider>
-    </BrowserRouter>
+                      <AppFooter />
+                    </SidebarInset>
+                    <WorkspaceIdentityModal />
+                  </NavigationPendingProvider>
+                </SidebarProvider>
+              </SensitiveDataProvider>
+            </WorkspaceIdentityProvider>
+          </SurveyDataProvider>
+        </TooltipProvider>
+      </BrowserRouter>
+    </AppPasswordGate>
   );
 }
