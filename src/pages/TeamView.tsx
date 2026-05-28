@@ -1220,13 +1220,20 @@ export default function TeamView() {
                   aria-haspopup="listbox"
                   aria-expanded={teamDropdownOpen}
                 >
-                  <SensitiveText
-                    as="span"
-                    hidden={isSensitiveDataHidden}
-                    className="truncate text-sm font-medium text-[#242424]"
-                  >
-                    {selectedTeam.name}
-                  </SensitiveText>
+                  <span className="flex min-w-0 items-center gap-3">
+                    {selectedScopeType === 'team' ? (
+                      <span className="flex h-7 w-7 shrink-0 select-none items-center justify-center rounded-full bg-gradient-to-br from-green-500 to-emerald-500 text-[10px] font-semibold text-white">
+                        {teamBadgeLabel(selectedTeam.name)}
+                      </span>
+                    ) : null}
+                    <SensitiveText
+                      as="span"
+                      hidden={isSensitiveDataHidden}
+                      className="truncate text-sm font-medium text-[#242424]"
+                    >
+                      {selectedTeam.name}
+                    </SensitiveText>
+                  </span>
                   <ChevronDown
                     className={`h-4 w-4 shrink-0 text-[#8b8b8b] transition-transform ${teamDropdownOpen ? 'rotate-180' : ''}`}
                   />
@@ -1269,23 +1276,6 @@ export default function TeamView() {
                                 {teamBadgeLabel(team.name)}
                               </span>
                             ) : null}
-                            <div
-                              className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
-                                isSelected ? 'border-[#1f6f54] bg-[#1f6f54]' : 'border-[#d4d4d4]'
-                              }`}
-                            >
-                              {isSelected ? (
-                                <svg
-                                  className="h-3 w-3 text-white"
-                                  viewBox="0 0 12 12"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="2"
-                                >
-                                  <path d="M2 6l3 3 5-5" />
-                                </svg>
-                              ) : null}
-                            </div>
                             <SensitiveText
                               as="span"
                               hidden={isSensitiveDataHidden}
