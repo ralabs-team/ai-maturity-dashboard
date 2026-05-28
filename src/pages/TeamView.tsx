@@ -21,6 +21,7 @@ import {
   TEAM_MAP_DIMENSIONS,
   TEAM_MAP_SERIES_META,
   TEAM_SECTION_LINKS,
+  teamBadgeLabel,
   type AiResearchPack,
   type CompositeSubscore,
   type ScopeType,
@@ -1178,150 +1179,137 @@ export default function TeamView() {
         subtitleClassName="mb-6 text-sm text-[#8b8b8b]"
       />
 
-      <section className="rounded-[28px] border border-[#e5e7eb] bg-[linear-gradient(180deg,#ffffff_0%,#fbfdff_100%)] p-4 shadow-[0_10px_30px_rgba(15,23,42,0.06)] md:p-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div className="flex min-w-0 flex-1 flex-col gap-3">
-            <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-[#7a7a7a]">
-              <span className="rounded-full bg-[#f4f6f8] px-2.5 py-1 text-[11px] uppercase tracking-[0.14em] text-[#6b7280]">
-                Browse by
-              </span>
-              <span className="hidden h-1 w-1 rounded-full bg-[#c7c7c7] sm:block" />
-              <span>{realTeamData.length} {scopeLabelPlural}</span>
-            </div>
-
-            <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
-              <div className="inline-flex w-fit items-center gap-1 rounded-2xl border border-[#e5e7eb] bg-[#f7f9fb] p-1">
-                {([
-                  { key: 'team' as const, label: 'Projects / Teams', count: teamBundle.teamRecords.length },
-                  {
-                    key: 'department' as const,
-                    label: 'Departments',
-                    count: departmentBundle.teamRecords.length,
-                  },
-                ]).map((option) => {
-                  const isActive = selectedScopeType === option.key;
-
-                  return (
-                    <button
-                      key={option.key}
-                      type="button"
-                      onClick={() => setSelectedScopeType(option.key)}
-                      className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-all ${
-                        isActive
-                          ? 'bg-white text-[#1f3d7a] shadow-[0_1px_2px_rgba(15,23,42,0.08)] ring-1 ring-[#d8e4ff]'
-                          : 'text-[#5f6673] hover:bg-white/80 hover:text-[#2f3747]'
-                      }`}
-                    >
-                      <span>{option.label}</span>
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-[11px] ${
-                          isActive ? 'bg-[#eef4ff] text-[#315ea8]' : 'bg-[#eceff3] text-[#69707d]'
-                        }`}
-                      >
-                        {option.count}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              <label className="min-w-0 flex-1">
-                <span className="sr-only">Select {scopeLabelLower}</span>
-                <div ref={teamDropdownRef} className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setTeamDropdownOpen((open) => !open)}
-                    className={`${FILTER_TRIGGER_CLASSNAME} h-12 w-full justify-between rounded-2xl border-[#e5e7eb] px-4 shadow-none focus-visible:ring-[#b0b0b0]/20`}
-                    aria-haspopup="listbox"
-                    aria-expanded={teamDropdownOpen}
-                  >
-                    <SensitiveText
-                      as="span"
-                      hidden={isSensitiveDataHidden}
-                      className="truncate text-sm font-medium text-[#242424]"
-                    >
-                      {selectedTeam.name}
-                    </SensitiveText>
-                    <ChevronDown
-                      className={`h-4 w-4 shrink-0 text-[#8b8b8b] transition-transform ${teamDropdownOpen ? 'rotate-180' : ''}`}
-                    />
-                  </button>
-
-                  {teamDropdownOpen && (
-                    <div className="absolute left-0 top-full z-20 mt-2 w-[320px] max-w-[calc(100vw-3rem)] rounded-2xl border border-[#e5e7eb] bg-white p-2 shadow-[0_18px_40px_rgba(15,23,42,0.12)]">
-                      <div className="border-b border-[#f0f0f0] pb-2">
-                        <input
-                          type="text"
-                          value={teamSearchQuery}
-                          onChange={(event) => setTeamSearchQuery(event.target.value)}
-                          placeholder={`Search ${selectedScopeType === 'team' ? 'projects or teams' : 'departments'}`}
-                          autoFocus
-                          className="h-10 w-full rounded-xl border border-[#e5e7eb] bg-white px-3 text-sm text-[#242424] outline-none transition-colors placeholder:text-[#a3a3a3] focus:border-[#b0b0b0] focus:ring-[3px] focus:ring-[#b0b0b0]/20"
-                        />
-                      </div>
-                      <div className="max-h-72 overflow-y-auto py-2" role="listbox">
-                        {filteredTeamOptions.map((team) => {
-                          const isSelected = team.id === selectedTeamId;
-
-                          return (
-                            <button
-                              key={team.id}
-                              type="button"
-                              onClick={() => {
-                                setSelectedTeamId(team.id);
-                                setTeamDropdownOpen(false);
-                              }}
-                              className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm transition-colors ${
-                                isSelected
-                                  ? 'bg-[#f4fbf7] text-[#242424]'
-                                  : 'text-[#3f3f46] hover:bg-[#f4f4f5]'
-                              }`}
-                              role="option"
-                              aria-selected={isSelected}
-                            >
-                              <div
-                                className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
-                                  isSelected ? 'border-[#1f6f54] bg-[#1f6f54]' : 'border-[#d4d4d4]'
-                                }`}
-                              >
-                                {isSelected ? (
-                                  <svg
-                                    className="h-3 w-3 text-white"
-                                    viewBox="0 0 12 12"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth="2"
-                                  >
-                                    <path d="M2 6l3 3 5-5" />
-                                  </svg>
-                                ) : null}
-                              </div>
-                              <SensitiveText
-                                as="span"
-                                hidden={isSensitiveDataHidden}
-                                className="min-w-0 flex-1 truncate font-medium"
-                              >
-                                {team.name}
-                              </SensitiveText>
-                              <span className="whitespace-nowrap text-xs text-[#8b8b8b]">
-                                {team.respondents} responses
-                              </span>
-                            </button>
-                          );
-                        })}
-                        {filteredTeamOptions.length === 0 ? (
-                          <div className="px-3 py-4 text-sm text-[#8b8b8b]">
-                            No {scopeLabelPlural} match "{teamSearchQuery.trim()}".
-                          </div>
-                        ) : null}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </label>
-            </div>
+      <section className="rounded-3xl border border-[#e5e7eb] bg-[linear-gradient(180deg,#fbfbfc_0%,#ffffff_100%)] p-5 shadow-sm">
+        <div className="flex flex-col gap-3">
+          <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-[#8b8b8b]">
+            Browse by
           </div>
 
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+            <div className="flex flex-wrap gap-2">
+              {([
+                { key: 'team' as const, label: 'Projects / Teams' },
+                { key: 'department' as const, label: 'Departments' },
+              ]).map((option) => {
+                const isActive = selectedScopeType === option.key;
+
+                return (
+                  <button
+                    key={option.key}
+                    type="button"
+                    onClick={() => setSelectedScopeType(option.key)}
+                    className={`inline-flex items-center rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+                      isActive
+                        ? 'border border-[#bfdbfe] bg-[#eff6ff] text-[#1d4ed8]'
+                        : 'border border-[#e5e7eb] bg-white text-[#525252] hover:bg-[#f8f8f8]'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <label className="min-w-0 flex-1">
+              <span className="sr-only">Select {scopeLabelLower}</span>
+              <div ref={teamDropdownRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => setTeamDropdownOpen((open) => !open)}
+                  className={`${FILTER_TRIGGER_CLASSNAME} h-12 w-full justify-between rounded-2xl border-[#e5e7eb] px-4 shadow-none focus-visible:ring-[#b0b0b0]/20`}
+                  aria-haspopup="listbox"
+                  aria-expanded={teamDropdownOpen}
+                >
+                  <SensitiveText
+                    as="span"
+                    hidden={isSensitiveDataHidden}
+                    className="truncate text-sm font-medium text-[#242424]"
+                  >
+                    {selectedTeam.name}
+                  </SensitiveText>
+                  <ChevronDown
+                    className={`h-4 w-4 shrink-0 text-[#8b8b8b] transition-transform ${teamDropdownOpen ? 'rotate-180' : ''}`}
+                  />
+                </button>
+
+                {teamDropdownOpen && (
+                  <div className="absolute left-0 top-full z-20 mt-2 w-[320px] max-w-[calc(100vw-3rem)] rounded-2xl border border-[#e5e7eb] bg-white p-2 shadow-[0_18px_40px_rgba(15,23,42,0.12)]">
+                    <div className="border-b border-[#f0f0f0] pb-2">
+                      <input
+                        type="text"
+                        value={teamSearchQuery}
+                        onChange={(event) => setTeamSearchQuery(event.target.value)}
+                        placeholder={`Search ${selectedScopeType === 'team' ? 'projects or teams' : 'departments'}`}
+                        autoFocus
+                        className="h-10 w-full rounded-xl border border-[#e5e7eb] bg-white px-3 text-sm text-[#242424] outline-none transition-colors placeholder:text-[#a3a3a3] focus:border-[#b0b0b0] focus:ring-[3px] focus:ring-[#b0b0b0]/20"
+                      />
+                    </div>
+                    <div className="max-h-72 overflow-y-auto py-2" role="listbox">
+                      {filteredTeamOptions.map((team) => {
+                        const isSelected = team.id === selectedTeamId;
+
+                        return (
+                          <button
+                            key={team.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedTeamId(team.id);
+                              setTeamDropdownOpen(false);
+                            }}
+                            className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm transition-colors ${
+                              isSelected
+                                ? 'bg-[#f4fbf7] text-[#242424]'
+                                : 'text-[#3f3f46] hover:bg-[#f4f4f5]'
+                            }`}
+                            role="option"
+                            aria-selected={isSelected}
+                          >
+                            {selectedScopeType === 'team' ? (
+                              <span className="flex h-7 w-7 shrink-0 select-none items-center justify-center rounded-full bg-gradient-to-br from-green-500 to-emerald-500 text-[10px] font-semibold text-white">
+                                {teamBadgeLabel(team.name)}
+                              </span>
+                            ) : null}
+                            <div
+                              className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+                                isSelected ? 'border-[#1f6f54] bg-[#1f6f54]' : 'border-[#d4d4d4]'
+                              }`}
+                            >
+                              {isSelected ? (
+                                <svg
+                                  className="h-3 w-3 text-white"
+                                  viewBox="0 0 12 12"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                >
+                                  <path d="M2 6l3 3 5-5" />
+                                </svg>
+                              ) : null}
+                            </div>
+                            <SensitiveText
+                              as="span"
+                              hidden={isSensitiveDataHidden}
+                              className="min-w-0 flex-1 truncate font-medium"
+                            >
+                              {team.name}
+                            </SensitiveText>
+                            <span className="whitespace-nowrap text-xs text-[#8b8b8b]">
+                              {team.respondents} responses
+                            </span>
+                          </button>
+                        );
+                      })}
+                      {filteredTeamOptions.length === 0 ? (
+                        <div className="px-3 py-4 text-sm text-[#8b8b8b]">
+                          No {scopeLabelPlural} match "{teamSearchQuery.trim()}".
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </label>
+          </div>
         </div>
       </section>
       <TeamSummarySection
