@@ -52,11 +52,15 @@ export default function UsageImpactQuadrantCard({
   onScopeChange,
   summary,
   data,
+  hideScopeToggle = false,
+  highlightName,
 }: {
   scope: UsageImpactScope;
   onScopeChange: (scope: UsageImpactScope) => void;
   summary: QuadrantSummaryItem[];
   data: QuadrantPoint[];
+  hideScopeToggle?: boolean;
+  highlightName?: string;
 }) {
   return (
     <section className="rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
@@ -67,25 +71,27 @@ export default function UsageImpactQuadrantCard({
         See which departments or teams use AI a lot, and which ones actually get value from it.
       </p>
 
-      <div className="mt-4 flex flex-wrap gap-2">
-        {([
-          { key: 'department' as const, label: 'Department' },
-          { key: 'team' as const, label: 'Team' },
-        ] as const).map((option) => (
-          <button
-            key={option.key}
-            type="button"
-            onClick={() => onScopeChange(option.key)}
-            className={`inline-flex items-center rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
-              scope === option.key
-                ? 'border border-[#bfdbfe] bg-[#eff6ff] text-[#1d4ed8]'
-                : 'border border-[#e5e7eb] bg-white text-[#525252] hover:bg-[#f8f8f8]'
-            }`}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
+      {hideScopeToggle ? null : (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {([
+            { key: 'department' as const, label: 'Department' },
+            { key: 'team' as const, label: 'Team' },
+          ] as const).map((option) => (
+            <button
+              key={option.key}
+              type="button"
+              onClick={() => onScopeChange(option.key)}
+              className={`inline-flex items-center rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+                scope === option.key
+                  ? 'border border-[#bfdbfe] bg-[#eff6ff] text-[#1d4ed8]'
+                  : 'border border-[#e5e7eb] bg-white text-[#525252] hover:bg-[#f8f8f8]'
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="mt-4 grid gap-2 xl:grid-cols-4">
         {summary.map((item) => (
@@ -171,7 +177,12 @@ export default function UsageImpactQuadrantCard({
             <ReferenceLine y={3} stroke="#d4d4d8" strokeDasharray="4 4" />
             <Scatter data={data}>
               {data.map((item) => (
-                <Cell key={item.name} fill={item.color} stroke="#ffffff" strokeWidth={2.5} />
+                <Cell
+                  key={item.name}
+                  fill={item.color}
+                  stroke={item.name === highlightName ? '#111827' : '#ffffff'}
+                  strokeWidth={item.name === highlightName ? 3.5 : 2.5}
+                />
               ))}
             </Scatter>
           </ScatterChart>

@@ -6,7 +6,6 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
-  Legend,
   PolarAngleAxis,
   PolarGrid,
   PolarRadiusAxis,
@@ -34,12 +33,13 @@ import SensitiveDataRiskPocketsCard from '../components/charts/organization/Sens
 import WorkflowTransformationGapCard from '../components/charts/organization/WorkflowTransformationGapCard';
 import VisionToActionGapCard from '../components/charts/organization/VisionToActionGapCard';
 import CultureSpreadGapCard from '../components/charts/organization/CultureSpreadGapCard';
+import RiskGovernanceHotspotsCard from '../components/charts/organization/RiskGovernanceHotspotsCard';
 import ChampionVisibilityOptions, {
   buildTopChampionRows,
 } from '../components/organization/ChampionVisibilityOptions';
 import { Tooltip as InfoTooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip';
 import { useSurveyData } from '../data/survey/SurveyDataContext';
-import { SUPPORT_DEMAND_SERIES, type SupportDemandSeriesKey } from '../data/survey/supportDemand';
+import type { SupportDemandSeriesKey } from '../data/survey/supportDemand';
 import {
   allProjectsList,
   computeCompositeQuestionScore,
@@ -51,7 +51,6 @@ import { LEVEL_LABELS, scoreToLevel, TECH_DIMENSIONS, type Individual, type Matu
 type CompositeDimension = 'Data' | 'Governance';
 type OrgDimension = TechDimension | CompositeDimension;
 type UsageImpactScope = 'department' | 'team';
-type SupportDemandScope = 'department' | 'seniority';
 type UsageImpactQuadrantKey = 'highHigh' | 'highLow' | 'lowHigh' | 'lowLow';
 type HeatmapRow = Record<OrgDimension, number> & {
   id: string;
@@ -484,10 +483,6 @@ type MaturityMapSnapshot = {
   data: MaturityMapPoint[];
   detail: string;
 };
-type SupportDemandRow = {
-  cohort: string;
-  respondents: number;
-} & Record<SupportDemandSeriesKey, number>;
 type MaturityDistributionLevelKey =
   | 'L1 Observer'
   | 'L2 Explorer'
@@ -567,64 +562,6 @@ const ORG_QUADRANT_COLORS = {
   lowLow: '#94a3b8',
 } as const;
 
-const accessGaps = [
-  { label: 'Need paid model access', value: 42 },
-  { label: 'Need company-funded IDE tools', value: 36 },
-  { label: 'Need clearer licensing ownership', value: 28 },
-  { label: 'Need project-level AI setup', value: 24 },
-];
-
-const workflowCoverage = [
-  { activity: 'Research', tech: 82, nonTech: 74 },
-  { activity: 'Planning', tech: 76, nonTech: 69 },
-  { activity: 'Code generation', tech: 71, nonTech: 9 },
-  { activity: 'Code review', tech: 58, nonTech: 4 },
-  { activity: 'Testing', tech: 49, nonTech: 3 },
-  { activity: 'Documentation', tech: 67, nonTech: 41 },
-  { activity: 'Client communication', tech: 28, nonTech: 54 },
-  { activity: 'Data analysis', tech: 34, nonTech: 47 },
-];
-
-const levelMovement = [
-  {
-    wave: 'Jan',
-    'L1 Observer': 20,
-    'L2 Explorer': 35,
-    'L3 Practitioner': 30,
-    'L4 Orchestrator': 12,
-    'L5 Native': 3,
-  },
-  {
-    wave: 'Mar',
-    'L1 Observer': 14,
-    'L2 Explorer': 31,
-    'L3 Practitioner': 35,
-    'L4 Orchestrator': 16,
-    'L5 Native': 4,
-  },
-  {
-    wave: 'May',
-    'L1 Observer': 8,
-    'L2 Explorer': 25,
-    'L3 Practitioner': 42,
-    'L4 Orchestrator': 20,
-    'L5 Native': 5,
-  },
-];
-
-const migrationMatrix = [
-  { movement: 'Down', people: 8, share: '6%', note: 'Mostly inconsistent adopters' },
-  { movement: 'Same', people: 72, share: '53%', note: 'Holding current behavior bands' },
-  { movement: 'Up 1 level', people: 45, share: '33%', note: 'Largest movement into Practitioner' },
-  { movement: 'Up 2+ levels', people: 10, share: '8%', note: 'Small but visible leapfrogs' },
-];
-
-const cultureHealth = [
-  { title: 'Practice sharers', value: '11', detail: 'people actively share AI practices' },
-  { title: 'Reusable artifacts', value: '7', detail: 'templates, prompts, agents, or guides created' },
-  { title: 'Adoption influenced', value: '6', detail: 'people whose workflows others adopted' },
-  { title: 'Single-point teams', value: '3', detail: 'teams where AI practice depends on one person' },
-];
 const DELIVERY_USAGE_ACTIVITY_OPTIONS = [
   'Writing / editing / communication',
   'Research & summarization',
@@ -1259,7 +1196,6 @@ const ORGANIZATION_SECTION_LINKS = [
     ],
   },
   { id: 'org-where-gaps', label: 'Where are the gaps?' },
-  { id: 'org-where-progress', label: 'Where are we making progress?' },
   { id: 'org-where-invest', label: 'Where should we invest?' },
 ] as const;
 const ALL_DEPARTMENTS = 'All departments';
@@ -1876,11 +1812,11 @@ function buildWorkflowTransformationDistribution(
 function normalizeHoursSavedLabel(
   _surveyType: SurveyType,
   rawValue: string | undefined,
-): string | null {
+): (typeof HOURS_SAVED_LABELS)[number] | null {
   const normalized = rawValue?.trim().replace(/\s+/g, ' ');
   if (!normalized) return null;
   return HOURS_SAVED_LABELS.includes(normalized as (typeof HOURS_SAVED_LABELS)[number])
-    ? normalized
+    ? (normalized as (typeof HOURS_SAVED_LABELS)[number])
     : null;
 }
 
@@ -3624,29 +3560,6 @@ function supportDemandAnswerKey(rawAnswer: string): SupportDemandSeriesKey | nul
   return null;
 }
 
-function wantsHandsOnTraining(rawAnswer: string | undefined): boolean {
-  return rawAnswer?.trim().toLowerCase().startsWith('yes') ?? false;
-}
-
-function wantsOneToOnePairing(rawAnswer: string | undefined): boolean {
-  return rawAnswer?.trim().toLowerCase().includes('1:1 pairing') ?? false;
-}
-
-function supportDemandSortWeight(label: string): number {
-  const normalized = label.trim().toLowerCase();
-
-  if (normalized.includes('intern')) return 0;
-  if (normalized.includes('junior')) return 1;
-  if (normalized.includes('middle')) return 2;
-  if (normalized.includes('senior')) return 3;
-  if (normalized.includes('lead')) return 4;
-  if (normalized.includes('head')) return 5;
-  if (normalized.includes('director')) return 6;
-  if (normalized.includes('chief') || normalized.includes('c-level')) return 7;
-
-  return 100;
-}
-
 function SectionHeader({ title, subtitle }: { title: string; subtitle: string }) {
   return (
     <div className="mb-4">
@@ -4369,6 +4282,68 @@ function buildSensitiveDataRiskRows(
     .sort((left, right) => left.score - right.score || right.riskyShare - left.riskyShare || left.name.localeCompare(right.name));
 }
 
+function blockerIsGovernanceHotspot(label: string | null): boolean {
+  return (
+    label === BLOCKER_LABEL_BY_KEY.noTeamAgreement ||
+    label === BLOCKER_LABEL_BY_KEY.dataSensitivityOrClient ||
+    label === BLOCKER_LABEL_BY_KEY.unclearProcessesOrSystem ||
+    label === BLOCKER_LABEL_BY_KEY.missingDocsOrReference
+  );
+}
+
+function riskGovernanceHotspotColor(safetyScore: number, governanceBlockerShare: number): string {
+  if (safetyScore < 3 && governanceBlockerShare >= 35) return '#dc2626';
+  if (safetyScore < 3.5 || governanceBlockerShare >= 25) return '#d97706';
+  return '#0f766e';
+}
+
+function buildRiskGovernanceHotspotRows(
+  responses: RawResponse[],
+  scope: GapScope,
+) {
+  return groupResponsesByGapScope(responses, scope)
+    .map(([name, scopedResponses]) => {
+      const safetyScores = scopedResponses
+        .map((response) =>
+          sensitiveDataScore(
+            response.surveyType === 'business' ? response.q2_9 : response.q2_12,
+          ),
+        )
+        .filter(isNumber);
+
+      if (safetyScores.length === 0) return null;
+
+      const governanceBlockerCount = scopedResponses.filter((response) =>
+        blockerIsGovernanceHotspot(
+          normalizeBlockerLabel(
+            response.surveyType ?? 'delivery-engineering',
+            response.surveyType === 'business' ? response.q3_blocker : response.q3_12,
+          ),
+        ),
+      ).length;
+
+      const safetyScore = roundToOne(average(safetyScores));
+      const governanceBlockerShare = roundToOne(
+        (governanceBlockerCount / Math.max(scopedResponses.length, 1)) * 100,
+      );
+
+      return {
+        name,
+        respondents: scopedResponses.length,
+        safetyScore,
+        governanceBlockerShare,
+        color: riskGovernanceHotspotColor(safetyScore, governanceBlockerShare),
+      };
+    })
+    .filter((row): row is NonNullable<typeof row> => Boolean(row))
+    .sort(
+      (left, right) =>
+        left.safetyScore - right.safetyScore ||
+        right.governanceBlockerShare - left.governanceBlockerShare ||
+        left.name.localeCompare(right.name),
+    );
+}
+
 function buildWorkflowTransformationGapRows(
   responses: RawResponse[],
   scope: GapScope,
@@ -4946,9 +4921,7 @@ export default function OrganizationView() {
   const [businessUsageMode, setBusinessUsageMode] = useState<UsageCategoryMode>('needle');
   const [deliveryUsageMode, setDeliveryUsageMode] = useState<UsageCategoryMode>('needle');
   const [usageImpactScope, setUsageImpactScope] = useState<UsageImpactScope>('department');
-  const [supportDemandScope, setSupportDemandScope] = useState<SupportDemandScope>('department');
   const [hiddenMaturityDistributionLevels, setHiddenMaturityDistributionLevels] = useState<MaturityDistributionLevelKey[]>([]);
-  const [hiddenSupportDemandSeries, setHiddenSupportDemandSeries] = useState<SupportDemandSeriesKey[]>([]);
   const [heatmapSort, setHeatmapSort] = useState<{
     key: HeatmapSortKey | null;
     direction: HeatmapSortDirection | null;
@@ -4970,7 +4943,6 @@ export default function OrganizationView() {
   const aiResearchPackPromiseRef = useRef<Promise<OrganizationAiResearchPack> | null>(null);
   const aiResearchPackVersionRef = useRef(0);
   const orgMaturityMap = useMemo(() => buildOrgMaturityMapSnapshot(rawResponses), [rawResponses]);
-
   useEffect(() => {
     clearPendingNavigation('/organization');
   }, [clearPendingNavigation]);
@@ -5207,96 +5179,6 @@ export default function OrganizationView() {
       })
       .sort((left, right) => right.overall - left.overall || left.name.localeCompare(right.name));
   }, [individuals]);
-
-  const supportDemandChartData = useMemo<SupportDemandRow[]>(() => {
-    const responsesByCohort = new Map<string, RawResponse[]>();
-
-    for (const response of rawResponses) {
-      const cohortName =
-        supportDemandScope === 'department'
-          ? response.department.trim()
-          : response.seniority.trim();
-
-      if (!cohortName) {
-        continue;
-      }
-
-      const existing = responsesByCohort.get(cohortName) ?? [];
-      existing.push(response);
-      responsesByCohort.set(cohortName, existing);
-    }
-
-    return Array.from(responsesByCohort.entries())
-      .map(([cohort, responses]) => {
-        const counts = {
-          advanced: 0,
-          overview: 0,
-          prompting: 0,
-          setup: 0,
-          peer: 0,
-          pairing: 0,
-          handsOn: 0,
-        } satisfies Record<SupportDemandSeriesKey, number>;
-
-        for (const response of responses) {
-          const supportAnswer =
-            response.surveyType === 'business' ? response.q4_10 : response.q4_12;
-          const trainingAnswer =
-            response.surveyType === 'business' ? response.q4_11 : response.q4_13;
-
-          const selectedSupportTypes = new Set<SupportDemandSeriesKey>();
-
-          for (const answer of splitSurveyMultiValue(supportAnswer)) {
-            const key = supportDemandAnswerKey(answer);
-            if (key) {
-              selectedSupportTypes.add(key);
-            }
-          }
-
-          for (const key of selectedSupportTypes) {
-            counts[key] += 1;
-          }
-
-          if (wantsHandsOnTraining(trainingAnswer)) {
-            counts.handsOn += 1;
-          }
-
-          if (wantsOneToOnePairing(trainingAnswer)) {
-            counts.pairing += 1;
-          }
-        }
-
-        const respondents = responses.length;
-
-        return {
-          cohort,
-          respondents,
-          advanced: roundToOne((counts.advanced / respondents) * 100),
-          overview: roundToOne((counts.overview / respondents) * 100),
-          prompting: roundToOne((counts.prompting / respondents) * 100),
-          setup: roundToOne((counts.setup / respondents) * 100),
-          peer: roundToOne((counts.peer / respondents) * 100),
-          pairing: roundToOne((counts.pairing / respondents) * 100),
-          handsOn: roundToOne((counts.handsOn / respondents) * 100),
-        };
-      })
-      .sort((left, right) => {
-        if (supportDemandScope === 'seniority') {
-          const leftWeight = supportDemandSortWeight(left.cohort);
-          const rightWeight = supportDemandSortWeight(right.cohort);
-          if (leftWeight !== rightWeight) {
-            return leftWeight - rightWeight;
-          }
-        }
-
-        return left.cohort.localeCompare(right.cohort);
-      });
-  }, [rawResponses, supportDemandScope]);
-
-  const visibleSupportDemandSeries = useMemo(
-    () => SUPPORT_DEMAND_SERIES.filter((series) => !hiddenSupportDemandSeries.includes(series.key)),
-    [hiddenSupportDemandSeries],
-  );
 
   const visibleMaturityDistribution = useMemo(
     () =>
@@ -5611,6 +5493,16 @@ export default function OrganizationView() {
 
   const gapSensitiveDataTeamRows = useMemo(
     () => buildSensitiveDataRiskRows(rawResponses, 'team'),
+    [rawResponses],
+  );
+
+  const investmentRiskGovernanceDepartmentRows = useMemo(
+    () => buildRiskGovernanceHotspotRows(rawResponses, 'department'),
+    [rawResponses],
+  );
+
+  const investmentRiskGovernanceTeamRows = useMemo(
+    () => buildRiskGovernanceHotspotRows(rawResponses, 'team'),
     [rawResponses],
   );
 
@@ -9840,331 +9732,25 @@ export default function OrganizationView() {
         </div>
       </section>
 
-      <section id="org-where-progress" className="mt-8 scroll-mt-24">
-        <SectionHeader
-          title="Where are we making progress?"
-          subtitle="Track where maturity is improving over time and which parts of the organization are building momentum."
-        />
-
-        <section className="rounded-2xl border border-dashed border-[#d4d4d8] bg-white p-6 shadow-sm">
-          <h3 className="text-lg font-semibold tracking-tight text-[#242424]">
-            Progress view coming next
-          </h3>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-[#7a7a7a]">
-            This section is reserved for trend and movement views, such as shifts in maturity levels,
-            adoption growth by cohort, and areas where enablement efforts are already working.
-          </p>
-        </section>
-      </section>
-
       <section id="org-where-invest" className="mt-8 scroll-mt-24">
         <SectionHeader
           title="Where should we invest?"
           subtitle="Translate survey outcomes into enablement priorities: role-specific training, licensing, and deeper workflow integration."
         />
 
-        <div className="grid gap-5 xl:grid-cols-3">
-          <section className="rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm xl:col-span-2">
-            <h3 className="text-lg font-semibold tracking-tight text-[#242424]">
-              Skill gap vs demand for support
-            </h3>
-            <p className="mt-1 text-sm text-[#7a7a7a]">
-              See where people want training most, and what kind of help they are asking for right now.
-            </p>
-
-            <div className="mt-5 flex flex-wrap items-center gap-2">
-              {[
-                { key: 'department' as const, label: 'Department' },
-                { key: 'seniority' as const, label: 'Seniority' },
-              ].map((option) => (
-                <button
-                  key={option.key}
-                  type="button"
-                  onClick={() => setSupportDemandScope(option.key)}
-                  className={`rounded-full border px-4 py-2 text-sm font-medium transition ${
-                    supportDemandScope === option.key
-                      ? 'border-[#bfdbfe] bg-[#eff6ff] text-[#1d4ed8]'
-                      : 'border-[#e5e7eb] bg-white text-[#525252] hover:bg-[#f8f8f8]'
-                  }`}
-                >
-                  {option.label}
-                </button>
-              ))}
-              <div className="text-sm text-[#8b8b8b]">
-                {supportDemandChartData.reduce((sum, row) => sum + row.respondents, 0)} responses in current view
-              </div>
-            </div>
-
-            <div className="mt-4 flex flex-wrap gap-2">
-              {SUPPORT_DEMAND_SERIES.map((series) => {
-                const isHidden = hiddenSupportDemandSeries.includes(series.key);
-
-                return (
-                  <InfoTooltip key={series.key}>
-                    <TooltipTrigger asChild>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setHiddenSupportDemandSeries((current) =>
-                            current.includes(series.key)
-                              ? current.filter((key) => key !== series.key)
-                              : [...current, series.key],
-                          )
-                        }
-                        className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition ${
-                          isHidden
-                            ? 'border-[#e5e7eb] bg-white text-[#9ca3af]'
-                            : 'border-[#e5e7eb] bg-[#fafafa] text-[#374151] hover:bg-[#f5f5f5]'
-                        }`}
-                        aria-pressed={!isHidden}
-                      >
-                        <span
-                          className="h-2.5 w-2.5 rounded-full"
-                          style={{ backgroundColor: series.color, opacity: isHidden ? 0.35 : 1 }}
-                        />
-                        <span className={isHidden ? 'line-through' : ''}>{series.label}</span>
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" sideOffset={8} className="max-w-[280px] px-3 py-2 text-[11px] leading-relaxed">
-                      <div className="font-medium text-white">{series.label}</div>
-                      <div className="mt-1 text-white/80">{series.detail}</div>
-                    </TooltipContent>
-                  </InfoTooltip>
-                );
-              })}
-            </div>
-
-            <div className="mt-6 h-[340px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={supportDemandChartData} margin={{ top: 10, right: 12, left: 0, bottom: 24 }}>
-                  <CartesianGrid stroke="#ececec" vertical={false} strokeDasharray="3 3" />
-                  <XAxis
-                    dataKey="cohort"
-                    interval={0}
-                    angle={-45}
-                    textAnchor="end"
-                    height={82}
-                    tick={{ fontSize: 12, fill: '#737373' }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <YAxis
-                    domain={[0, 100]}
-                    tickFormatter={(value) => `${value}%`}
-                    tick={{ fontSize: 12, fill: '#737373' }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <Tooltip
-                    isAnimationActive={false}
-                    contentStyle={{
-                      backgroundColor: '#242424',
-                      border: 'none',
-                      borderRadius: '10px',
-                      padding: '10px 12px',
-                      color: '#ffffff',
-                      fontSize: '12px',
-                    }}
-                    labelStyle={{ color: '#ffffff', fontWeight: 600, marginBottom: 4 }}
-                    itemStyle={{ color: '#ffffff' }}
-                    labelFormatter={(label, payload) => {
-                      const respondents = payload?.[0]?.payload?.respondents;
-                      const cohortLabel = supportDemandScope === 'department' ? 'Department' : 'Seniority';
-                      return `${cohortLabel}: ${label}${respondents ? ` (${respondents} respondents)` : ''}`;
-                    }}
-                    formatter={(value, name, item) => {
-                      const respondents = item?.payload?.respondents ?? 0;
-                      const count = Math.round((Number(value) / 100) * respondents);
-                      return [`${value}% (${count} people)`, name];
-                    }}
-                  />
-                  {visibleSupportDemandSeries.map((series) => (
-                    <Bar
-                      key={series.key}
-                      dataKey={series.key}
-                      name={series.label}
-                      fill={series.color}
-                      radius={[6, 6, 0, 0]}
-                    />
-                  ))}
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-
-            <p className="mt-3 text-xs text-[#8b8b8b]">
-              Percent of respondents in each cohort who selected each support type. Support needs are multi-select, so totals can exceed 100%.
-            </p>
-          </section>
-
-          <section className="rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
-            <h3 className="text-lg font-semibold tracking-tight text-[#242424]">
-              Tool access and licensing gaps
-            </h3>
-            <p className="mt-1 text-sm text-[#7a7a7a]">
-              The biggest access issues are not awareness-related anymore; they are budget, ownership, and setup problems.
-            </p>
-
-            <div className="mt-6 h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={accessGaps} layout="vertical" margin={{ top: 10, right: 12, left: 32, bottom: 0 }}>
-                  <CartesianGrid stroke="#ececec" horizontal={false} />
-                  <XAxis
-                    type="number"
-                    domain={[0, 50]}
-                    tickFormatter={(value) => `${value}%`}
-                    tick={{ fontSize: 12, fill: '#737373' }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <YAxis
-                    dataKey="label"
-                    type="category"
-                    width={145}
-                    tick={{ fontSize: 11, fill: '#737373' }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <Tooltip isAnimationActive={false} formatter={(value) => `${value}%`} />
-                  <Bar dataKey="value" fill="#0f766e" radius={[0, 8, 8, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </section>
-
-          <section className="rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
-            <h3 className="text-lg font-semibold tracking-tight text-[#242424]">
-              AI workflow coverage
-            </h3>
-            <p className="mt-1 text-sm text-[#7a7a7a]">
-              This shows whether adoption is shallow, mostly research and writing, or deep inside execution-heavy workflows.
-            </p>
-
-            <div className="mt-6 h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={workflowCoverage} layout="vertical" margin={{ top: 10, right: 12, left: 32, bottom: 0 }}>
-                  <CartesianGrid stroke="#ececec" horizontal={false} />
-                  <XAxis
-                    type="number"
-                    domain={[0, 100]}
-                    tickFormatter={(value) => `${value}%`}
-                    tick={{ fontSize: 12, fill: '#737373' }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <YAxis
-                    dataKey="activity"
-                    type="category"
-                    width={125}
-                    tick={{ fontSize: 11, fill: '#737373' }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <Tooltip isAnimationActive={false} formatter={(value) => `${value}%`} />
-                  <Legend iconType="circle" />
-                  <Bar dataKey="tech" name="Tech" fill="#14b8a6" radius={[0, 8, 8, 0]} />
-                  <Bar dataKey="nonTech" name="Non-tech" fill="#94a3b8" radius={[0, 8, 8, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </section>
-        </div>
-      </section>
-
-      <section className="mt-8">
-        <SectionHeader
-          title="Are we improving?"
-          subtitle="Track whether people are moving up maturity levels over time and whether AI capability is becoming organization knowledge."
-        />
-
-        <div className="grid gap-5 xl:grid-cols-[1.05fr_0.95fr]">
-          <section className="rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
-            <h3 className="text-lg font-semibold tracking-tight text-[#242424]">
-              Level movement over time
-            </h3>
-            <p className="mt-1 text-sm text-[#7a7a7a]">
-              Stacked level movement is easier to interpret than simple average-score lines because it shows people actually migrating upward.
-            </p>
-
-            <div className="mt-6 h-[320px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={levelMovement} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
-                  <CartesianGrid stroke="#ececec" vertical={false} strokeDasharray="3 3" />
-                  <XAxis dataKey="wave" tick={{ fontSize: 12, fill: '#737373' }} axisLine={false} tickLine={false} />
-                  <YAxis
-                    domain={[0, 100]}
-                    tickFormatter={(value) => `${value}%`}
-                    tick={{ fontSize: 12, fill: '#737373' }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <Tooltip isAnimationActive={false} formatter={(value) => `${value}%`} />
-                  <Legend iconType="circle" />
-                  <Bar dataKey="L1 Observer" stackId="levels" fill={LEVEL_COLORS.Observer} />
-                  <Bar dataKey="L2 Explorer" stackId="levels" fill={LEVEL_COLORS.Explorer} />
-                  <Bar dataKey="L3 Practitioner" stackId="levels" fill={LEVEL_COLORS.Practitioner} />
-                  <Bar dataKey="L4 Orchestrator" stackId="levels" fill={LEVEL_COLORS.Orchestrator} />
-                  <Bar dataKey="L5 Native" stackId="levels" fill={LEVEL_COLORS.Native} radius={[8, 8, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </section>
-
-          <div className="grid gap-5">
-            <section className="rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
-              <h3 className="text-lg font-semibold tracking-tight text-[#242424]">
-                Level migration matrix
-              </h3>
-              <p className="mt-1 text-sm text-[#7a7a7a]">
-                This is a better progress story than average score change alone because it shows real movement between maturity bands.
-              </p>
-
-              <div className="mt-5 overflow-hidden rounded-2xl border border-[#ececec]">
-                <table className="min-w-full divide-y divide-[#ececec] text-sm">
-                  <thead className="bg-[#fafafa]">
-                    <tr>
-                      <th className="px-4 py-3 text-left font-medium text-[#737373]">Previous → Current</th>
-                      <th className="px-4 py-3 text-left font-medium text-[#737373]">People</th>
-                      <th className="px-4 py-3 text-left font-medium text-[#737373]">Share</th>
-                      <th className="px-4 py-3 text-left font-medium text-[#737373]">What it means</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#f0f0f0] bg-white">
-                    {migrationMatrix.map((row) => (
-                      <tr key={row.movement}>
-                        <td className="px-4 py-3 font-medium text-[#242424]">{row.movement}</td>
-                        <td className="px-4 py-3 text-[#242424]">{row.people}</td>
-                        <td className="px-4 py-3 text-[#242424]">{row.share}</td>
-                        <td className="px-4 py-3 text-[#737373]">{row.note}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-
-            <section className="rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
-              <h3 className="text-lg font-semibold tracking-tight text-[#242424]">
-                Champions and dependency risk
-              </h3>
-              <p className="mt-1 text-sm text-[#7a7a7a]">
-                Culture health is strongest when practices are reusable and team-owned, not concentrated in a few strong individuals.
-              </p>
-
-              <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                {cultureHealth.map((item) => (
-                  <div key={item.title} className="rounded-2xl border border-[#ececec] bg-[#fbfbfb] p-4">
-                    <div className="text-xs font-medium uppercase tracking-[0.14em] text-[#8b8b8b]">
-                      {item.title}
-                    </div>
-                    <div className="mt-3 text-2xl font-semibold tracking-tight text-[#242424]">
-                      {item.value}
-                    </div>
-                    <div className="mt-2 text-sm text-[#737373]">{item.detail}</div>
-                  </div>
-                ))}
-              </div>
-            </section>
-          </div>
+        <div className="grid gap-5 xl:grid-cols-2">
+          <SupportDemandSkillsGapCard
+            departmentRows={gapSupportDemandDepartmentRows}
+            teamRows={gapSupportDemandTeamRows}
+          />
+          <ToolAccessConstraintMapCard
+            departmentRows={gapToolAccessDepartmentRows}
+            teamRows={gapToolAccessTeamRows}
+          />
+          <RiskGovernanceHotspotsCard
+            departmentRows={investmentRiskGovernanceDepartmentRows}
+            teamRows={investmentRiskGovernanceTeamRows}
+          />
         </div>
       </section>
 

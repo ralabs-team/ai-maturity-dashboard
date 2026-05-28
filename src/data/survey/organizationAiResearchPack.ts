@@ -20,6 +20,14 @@ type BuildOrganizationAiResearchPackArgs = {
   resolvePersonName: (username: string) => string;
 };
 
+type OrganizationAiResearchPack = {
+  filename: string;
+  markdown: string;
+  metadata?: {
+    projectAliasesByName?: Record<string, string>;
+  };
+};
+
 type AliasMaps = {
   people: Map<string, string>;
   projects: Map<string, string>;
@@ -641,7 +649,7 @@ export function buildOrganizationAiResearchPack({
   individuals,
   rawResponses,
   resolvePersonName,
-}: BuildOrganizationAiResearchPackArgs): { filename: string; markdown: string } {
+}: BuildOrganizationAiResearchPackArgs): OrganizationAiResearchPack {
   const aliasMaps = createAliasMaps(individuals, rawResponses, resolvePersonName);
   const departmentRows = buildDepartmentRows(individuals);
   const projectRows = buildProjectRows(individuals);
@@ -817,5 +825,8 @@ export function buildOrganizationAiResearchPack({
   return {
     filename: `organization-ai-research-pack-${REPORT_DATE_STAMP}.md`,
     markdown: `${lines.join('\n')}\n`,
+    metadata: {
+      projectAliasesByName: Object.fromEntries(aliasMaps.projects),
+    },
   };
 }

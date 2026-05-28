@@ -6,6 +6,7 @@ export {
   ComposedChart,
   Legend,
   Line,
+  LineChart,
   Pie,
   PieChart,
   PolarAngleAxis,

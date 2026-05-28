@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ScatterChart, Scatter, ResponsiveContainer, CartesianGrid, XAxis, YAxis, ZAxis, Tooltip, Cell } from '../recharts';
 
 type Scope = 'department' | 'team';
@@ -41,11 +41,25 @@ function AccessConstraintTooltip({
 export default function ToolAccessConstraintMapCard({
   departmentRows,
   teamRows,
+  scope: forcedScope,
+  hideScopeToggle = false,
+  highlightName,
 }: {
   departmentRows: Row[];
   teamRows: Row[];
+  scope?: Scope;
+  hideScopeToggle?: boolean;
+  highlightName?: string;
 }) {
-  const [scope, setScope] = useState<Scope>('department');
+  const [internalScope, setInternalScope] = useState<Scope>(forcedScope ?? 'department');
+
+  useEffect(() => {
+    if (forcedScope) {
+      setInternalScope(forcedScope);
+    }
+  }, [forcedScope]);
+
+  const scope = forcedScope ?? internalScope;
   const rows = scope === 'department' ? departmentRows : teamRows;
 
   return (
@@ -57,22 +71,24 @@ export default function ToolAccessConstraintMapCard({
         Combine access and licensing, who pays, and cost maturity. This helps distinguish “people don’t know how” from “people can’t get the right tools.”
       </p>
 
-      <div className="mt-4 flex flex-wrap gap-2">
-        {(['department', 'team'] as const).map((option) => (
-          <button
-            key={option}
-            type="button"
-            onClick={() => setScope(option)}
-            className={`rounded-full border px-4 py-2 text-sm font-medium transition ${
-              scope === option
-                ? 'border-[#bfdbfe] bg-[#eff6ff] text-[#1d4ed8]'
-                : 'border-[#e5e7eb] bg-white text-[#525252] hover:bg-[#f8f8f8]'
-            }`}
-          >
-            {option === 'department' ? 'Department' : 'Team'}
-          </button>
-        ))}
-      </div>
+      {hideScopeToggle ? null : (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {(['department', 'team'] as const).map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => setInternalScope(option)}
+              className={`rounded-full border px-4 py-2 text-sm font-medium transition ${
+                scope === option
+                  ? 'border-[#bfdbfe] bg-[#eff6ff] text-[#1d4ed8]'
+                  : 'border-[#e5e7eb] bg-white text-[#525252] hover:bg-[#f8f8f8]'
+              }`}
+            >
+              {option === 'department' ? 'Department' : 'Team'}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="mt-6 h-[340px]">
         <ResponsiveContainer width="100%" height="100%">
@@ -116,7 +132,12 @@ export default function ToolAccessConstraintMapCard({
             <Tooltip isAnimationActive={false} content={<AccessConstraintTooltip scope={scope} />} />
             <Scatter data={rows}>
               {rows.map((row) => (
-                <Cell key={row.name} fill={row.color} stroke="#ffffff" strokeWidth={2} />
+                <Cell
+                  key={row.name}
+                  fill={row.color}
+                  stroke={row.name === highlightName ? '#111827' : '#ffffff'}
+                  strokeWidth={row.name === highlightName ? 3 : 2}
+                />
               ))}
             </Scatter>
           </ScatterChart>

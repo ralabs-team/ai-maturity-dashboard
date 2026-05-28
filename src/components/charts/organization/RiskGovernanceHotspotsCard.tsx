@@ -16,8 +16,8 @@ type Scope = 'department' | 'team';
 type Row = {
   name: string;
   respondents: number;
-  baselineSkills: number;
-  supportDemand: number;
+  safetyScore: number;
+  governanceBlockerShare: number;
   color: string;
 };
 
@@ -39,15 +39,15 @@ function TooltipContent({
         {scope === 'department' ? 'Department' : 'Team'}: {point.name}
       </div>
       <div className="space-y-1">
-        <div>Baseline AI understanding: {point.baselineSkills.toFixed(1)} / 5</div>
-        <div>Support demand: {point.supportDemand.toFixed(1)}%</div>
+        <div>Safe handling score: {point.safetyScore.toFixed(1)} / 5</div>
+        <div>Governance blocker share: {point.governanceBlockerShare.toFixed(1)}%</div>
         <div>Respondents: {point.respondents}</div>
       </div>
     </div>
   );
 }
 
-export default function SupportDemandSkillsGapCard({
+export default function RiskGovernanceHotspotsCard({
   departmentRows,
   teamRows,
   scope: forcedScope,
@@ -74,10 +74,12 @@ export default function SupportDemandSkillsGapCard({
   return (
     <section className="rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
       <h3 className="text-lg font-semibold tracking-tight text-[#242424]">
-        Support demand vs current skill baseline
+        Risk and governance hotspots
       </h3>
       <p className="mt-1 text-sm text-[#7a7a7a]">
-        Show departments or teams that ask for the most support while still sitting low on baseline AI understanding. This is great for prioritizing enablement.
+        Combine sensitive data handling with governance-style blockers. This helps identify
+        where investment should go into guardrails, documented practices, onboarding, and safer
+        operating models.
       </p>
 
       {hideScopeToggle ? null : (
@@ -99,49 +101,50 @@ export default function SupportDemandSkillsGapCard({
         </div>
       )}
 
-      <div className="mt-6 h-[340px]">
-        <ResponsiveContainer width="100%" height="100%">
-          <ScatterChart margin={{ top: 10, right: 12, left: 0, bottom: 18 }}>
-            <CartesianGrid stroke="#ececec" strokeDasharray="3 3" />
-            <XAxis
-              type="number"
-              dataKey="baselineSkills"
-              domain={[1, 5]}
-              ticks={[1, 2, 3, 4, 5]}
-              tick={{ fontSize: 12, fill: '#737373' }}
-              axisLine={false}
-              tickLine={false}
-              label={{
-                value: 'Baseline AI understanding',
-                position: 'bottom',
-                offset: 6,
-                fill: '#525252',
-                fontSize: 12,
-                fontWeight: 600,
-              }}
-            />
-            <YAxis
-              type="number"
-              dataKey="supportDemand"
-              domain={[0, 100]}
-              ticks={[0, 25, 50, 75, 100]}
-              tickFormatter={(value) => `${value}%`}
-              tick={{ fontSize: 12, fill: '#737373' }}
-              axisLine={false}
-              tickLine={false}
-              label={{
-                value: 'Support demand',
-                angle: -90,
-                position: 'insideLeft',
-                fill: '#525252',
-                fontSize: 12,
-                fontWeight: 600,
-              }}
-            />
-            <ZAxis type="number" dataKey="respondents" range={[160, 1100]} />
-            <Tooltip isAnimationActive={false} content={<TooltipContent scope={scope} />} />
-            <ReferenceLine x={3} stroke="#d4d4d8" strokeDasharray="4 4" />
-            <ReferenceLine y={50} stroke="#d4d4d8" strokeDasharray="4 4" />
+      {rows.length > 0 ? (
+        <div className="mt-6 h-[340px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <ScatterChart margin={{ top: 10, right: 12, left: 0, bottom: 18 }}>
+              <CartesianGrid stroke="#ececec" strokeDasharray="3 3" />
+              <XAxis
+                type="number"
+                dataKey="safetyScore"
+                domain={[1, 5]}
+                ticks={[1, 2, 3, 4, 5]}
+                tick={{ fontSize: 12, fill: '#737373' }}
+                axisLine={false}
+                tickLine={false}
+                label={{
+                  value: 'Sensitive data handling safety',
+                  position: 'bottom',
+                  offset: 6,
+                  fill: '#525252',
+                  fontSize: 12,
+                  fontWeight: 600,
+                }}
+              />
+              <YAxis
+                type="number"
+                dataKey="governanceBlockerShare"
+                domain={[0, 100]}
+                ticks={[0, 25, 50, 75, 100]}
+                tickFormatter={(value) => `${value}%`}
+                tick={{ fontSize: 12, fill: '#737373' }}
+                axisLine={false}
+                tickLine={false}
+                label={{
+                  value: 'Governance blocker share',
+                  angle: -90,
+                  position: 'insideLeft',
+                  fill: '#525252',
+                  fontSize: 12,
+                  fontWeight: 600,
+                }}
+              />
+              <ZAxis type="number" dataKey="respondents" range={[160, 1100]} />
+              <Tooltip isAnimationActive={false} content={<TooltipContent scope={scope} />} />
+              <ReferenceLine x={3} stroke="#d4d4d8" strokeDasharray="4 4" />
+              <ReferenceLine y={35} stroke="#d4d4d8" strokeDasharray="4 4" />
             <Scatter data={rows}>
               {rows.map((row) => (
                 <Cell
@@ -152,9 +155,14 @@ export default function SupportDemandSkillsGapCard({
                 />
               ))}
             </Scatter>
-          </ScatterChart>
-        </ResponsiveContainer>
-      </div>
+            </ScatterChart>
+          </ResponsiveContainer>
+        </div>
+      ) : (
+        <div className="mt-6 flex h-[220px] items-center justify-center rounded-2xl border border-dashed border-[#d4d4d8] bg-[#fafafa] px-6 text-center text-sm text-[#7a7a7a]">
+          No {scope === 'department' ? 'departments' : 'teams'} have enough data for this chart in the current view.
+        </div>
+      )}
     </section>
   );
 }
