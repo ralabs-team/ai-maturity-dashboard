@@ -10,6 +10,7 @@ import {
   buildChampionRows,
 } from '../components/organization/ChampionVisibilityOptions';
 import TeamChampionsSection from '../components/team/TeamChampionsSection';
+import TeamDimensionsSection from '../components/team/TeamDimensionsSection';
 import TeamGapInsightsSection from '../components/team/TeamGapInsightsSection';
 import TeamMaturityMapSection from '../components/team/TeamMaturityMapSection';
 import TeamMembersSection from '../components/team/TeamMembersSection';
@@ -1319,6 +1320,12 @@ export default function TeamView() {
         supportDemandRows={scopedGapInsights.supportDemandRows}
         toolAccessRows={scopedGapInsights.toolAccessRows}
         workflowRows={scopedGapInsights.workflowRows}
+      />
+
+      <TeamDimensionsSection
+        scopeLabelLower={scopeLabelLower}
+        selectedScopeName={selectedScopeName}
+        responses={selectedScopeResponses}
       />
 
       <TeamChampionsSection
