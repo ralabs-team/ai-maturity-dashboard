@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import {
   Bar,
@@ -22,7 +22,9 @@ import {
 import PageHeader from '../components/layout/PageHeader';
 import FloatingSectionNav from '../components/layout/FloatingSectionNav';
 import { useNavigationPending } from '../components/layout/NavigationPendingContext';
+import { useSensitiveData } from '../components/privacy/SensitiveDataContext';
 import ProjectAvatar from '../components/ui/ProjectAvatar';
+import SensitiveText from '../components/ui/SensitiveText';
 import UsageImpactQuadrantCard from '../components/charts/organization/UsageImpactQuadrantCard';
 import SkillsConfidenceGapCard from '../components/charts/organization/SkillsConfidenceGapCard';
 import ToolAccessConstraintMapCard from '../components/charts/organization/ToolAccessConstraintMapCard';
@@ -34,9 +36,12 @@ import WorkflowTransformationGapCard from '../components/charts/organization/Wor
 import VisionToActionGapCard from '../components/charts/organization/VisionToActionGapCard';
 import CultureSpreadGapCard from '../components/charts/organization/CultureSpreadGapCard';
 import RiskGovernanceHotspotsCard from '../components/charts/organization/RiskGovernanceHotspotsCard';
-import ChampionVisibilityOptions, {
-  buildTopChampionRows,
-} from '../components/organization/ChampionVisibilityOptions';
+import { buildTopChampionRows } from '../components/organization/ChampionVisibilityOptions';
+import CompactUsageMultiSelect from '../components/organization/CompactUsageMultiSelect';
+import OrganizationDimensionCultureSection from '../components/organization/OrganizationDimensionCultureSection';
+import OrganizationDimensionImpactSection from '../components/organization/OrganizationDimensionImpactSection';
+import OrganizationDimensionVisionSection from '../components/organization/OrganizationDimensionVisionSection';
+import SectionHeader from '../components/organization/OrganizationSectionHeader';
 import { Tooltip as InfoTooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip';
 import { useSurveyData } from '../data/survey/SurveyDataContext';
 import type { SupportDemandSeriesKey } from '../data/survey/supportDemand';
@@ -434,34 +439,6 @@ type ImpactComparisonRow = {
   deliveryCount: number;
   deliveryShare: number;
 };
-type CompactUsageMultiSelectProps = {
-  placeholder: string;
-  singularLabel: string;
-  pluralLabel: string;
-  searchPlaceholder: string;
-  ariaLabel: string;
-  options: string[];
-  selectedValues: string[];
-  onToggle: (value: string) => void;
-  onClear: () => void;
-};
-type DepartmentTeamFiltersProps = {
-  respondentCount: number;
-  departmentOptions: string[];
-  teamOptions: string[];
-  selectedDepartments: string[];
-  selectedTeams: string[];
-  departmentAriaLabel: string;
-  teamAriaLabel: string;
-  onToggleDepartment: (value: string) => void;
-  onToggleTeam: (value: string) => void;
-  onClearDepartments: () => void;
-  onClearTeams: () => void;
-  onClearAll: () => void;
-  onRemoveDepartment: (value: string) => void;
-  onRemoveTeam: (value: string) => void;
-};
-
 type SummaryCard = {
   title: string;
   value: string;
@@ -3239,257 +3216,6 @@ function filterUsageResponsesMulti(
   });
 }
 
-function CompactUsageMultiSelect({
-  placeholder,
-  singularLabel,
-  pluralLabel,
-  searchPlaceholder,
-  ariaLabel,
-  options,
-  selectedValues,
-  onToggle,
-  onClear,
-}: CompactUsageMultiSelectProps) {
-  const [open, setOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const dropdownRef = useRef<HTMLDivElement | null>(null);
-  const normalizedQuery = searchQuery.trim().toLowerCase();
-  const filteredOptions = useMemo(
-    () =>
-      normalizedQuery.length === 0
-        ? options
-        : options.filter((option) => option.toLowerCase().includes(normalizedQuery)),
-    [normalizedQuery, options],
-  );
-  const isActive = selectedValues.length > 0;
-  const triggerLabel =
-    selectedValues.length === 0
-      ? placeholder
-      : `${selectedValues.length} ${
-          selectedValues.length === 1 ? singularLabel : pluralLabel
-        }`;
-
-  useEffect(() => {
-    if (!open) {
-      setSearchQuery('');
-      return;
-    }
-
-    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
-      const target = event.target;
-      if (!(target instanceof Node)) {
-        return;
-      }
-
-      if (dropdownRef.current && !dropdownRef.current.contains(target)) {
-        setOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handlePointerDown);
-    document.addEventListener('touchstart', handlePointerDown);
-
-    return () => {
-      document.removeEventListener('mousedown', handlePointerDown);
-      document.removeEventListener('touchstart', handlePointerDown);
-    };
-  }, [open]);
-
-  return (
-    <div
-      ref={dropdownRef}
-      className="relative w-full min-w-0 sm:w-auto sm:min-w-[180px] sm:max-w-[220px]"
-    >
-      <button
-        type="button"
-        onClick={() => setOpen((current) => !current)}
-        className={`flex h-12 w-full items-center justify-between gap-3 rounded-2xl border pl-4 pr-4 text-left text-sm font-medium outline-none transition-all focus:ring-[3px] focus:ring-[#b0b0b0]/20 sm:w-auto sm:min-w-[180px] sm:max-w-[220px] ${
-          isActive
-            ? 'border-[#cfe7dc] bg-[#f4fbf7] text-[#242424] shadow-[0_1px_2px_rgba(15,23,42,0.06)] focus:border-[#9fc8b4]'
-            : 'border-[#e5e7eb] bg-white text-[#8b8b8b] focus:border-[#b0b0b0]'
-        }`}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-label={ariaLabel}
-      >
-        <span className="truncate">{triggerLabel}</span>
-        <ChevronDown className="h-4 w-4 shrink-0 text-[#8b8b8b]" />
-      </button>
-
-      {open ? (
-        <div className="absolute left-0 top-full z-20 mt-2 w-[260px] max-w-[calc(100vw-3rem)] rounded-2xl border border-[#e5e7eb] bg-white p-2 shadow-[0_18px_40px_rgba(15,23,42,0.12)]">
-          <div className="border-b border-[#f0f0f0] pb-2">
-            <input
-              type="search"
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder={searchPlaceholder}
-              autoFocus
-              className="h-10 w-full rounded-xl border border-[#e5e7eb] bg-white px-3 text-sm text-[#242424] outline-none transition-colors placeholder:text-[#a3a3a3] focus:border-[#b0b0b0] focus:ring-[3px] focus:ring-[#b0b0b0]/20"
-            />
-          </div>
-
-          <div className="max-h-72 overflow-y-auto py-2">
-            {filteredOptions.map((option) => {
-              const isSelected = selectedValues.includes(option);
-
-              return (
-                <button
-                  key={option}
-                  type="button"
-                  onClick={() => onToggle(option)}
-                  className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm transition-colors ${
-                    isSelected
-                      ? 'bg-[#f4fbf7] text-[#242424]'
-                      : 'text-[#3f3f46] hover:bg-[#f4f4f5]'
-                  }`}
-                  role="option"
-                  aria-selected={isSelected}
-                >
-                  <div
-                    className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
-                      isSelected ? 'border-[#1f6f54] bg-[#1f6f54]' : 'border-[#d4d4d4]'
-                    }`}
-                  >
-                    {isSelected ? (
-                      <svg
-                        className="h-3 w-3 text-white"
-                        viewBox="0 0 12 12"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                      >
-                        <path d="M2 6l3 3 5-5" />
-                      </svg>
-                    ) : null}
-                  </div>
-                  <span className="truncate">{option}</span>
-                </button>
-              );
-            })}
-
-            {filteredOptions.length === 0 ? (
-              <div className="px-3 py-4 text-sm text-[#8b8b8b]">
-                No matches for "{searchQuery.trim()}".
-              </div>
-            ) : null}
-          </div>
-
-          {selectedValues.length > 0 ? (
-            <div className="border-t border-[#f0f0f0] pt-2">
-              <button
-                type="button"
-                onClick={onClear}
-                className="text-sm font-medium text-[#2f6f59] transition hover:text-[#1f5a47]"
-              >
-                Clear {placeholder.toLowerCase()}
-              </button>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function DepartmentTeamFilters({
-  respondentCount,
-  departmentOptions,
-  teamOptions,
-  selectedDepartments,
-  selectedTeams,
-  departmentAriaLabel,
-  teamAriaLabel,
-  onToggleDepartment,
-  onToggleTeam,
-  onClearDepartments,
-  onClearTeams,
-  onClearAll,
-  onRemoveDepartment,
-  onRemoveTeam,
-}: DepartmentTeamFiltersProps) {
-  const hasActiveFilters = selectedDepartments.length > 0 || selectedTeams.length > 0;
-
-  return (
-    <div className="mt-5">
-      <div className="flex flex-wrap gap-3">
-        <CompactUsageMultiSelect
-          placeholder="Department"
-          singularLabel="department"
-          pluralLabel="departments"
-          searchPlaceholder="Search departments..."
-          ariaLabel={departmentAriaLabel}
-          options={departmentOptions}
-          selectedValues={selectedDepartments}
-          onToggle={onToggleDepartment}
-          onClear={onClearDepartments}
-        />
-        <CompactUsageMultiSelect
-          placeholder="Team"
-          singularLabel="team"
-          pluralLabel="teams"
-          searchPlaceholder="Search teams..."
-          ariaLabel={teamAriaLabel}
-          options={teamOptions}
-          selectedValues={selectedTeams}
-          onToggle={onToggleTeam}
-          onClear={onClearTeams}
-        />
-      </div>
-      <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
-        <div className="text-[#8b8b8b]">
-          {respondentCount} respondents in current filter
-        </div>
-        {hasActiveFilters ? (
-          <>
-            <button
-              type="button"
-              onClick={onClearAll}
-              className="inline-flex items-center rounded-full border border-[#d8e5de] bg-[#f7fbf8] px-3 py-1.5 text-xs font-medium text-[#2f6f59] transition hover:border-[#c3d9ce] hover:bg-[#eef8f2]"
-            >
-              Clear filters
-            </button>
-            {selectedDepartments.map((department) => (
-              <span
-                key={`department-filter-${department}`}
-                className="inline-flex items-center gap-1.5 rounded-full border border-[#e5e7eb] bg-[#f4f4f5] py-1 pl-2.5 pr-1 text-xs font-medium text-[#242424]"
-              >
-                <span className="text-[#6b7280]">Department</span>
-                <span>{department}</span>
-                <button
-                  type="button"
-                  onClick={() => onRemoveDepartment(department)}
-                  className="rounded-full p-1 text-[#8b8b8b] transition hover:bg-white hover:text-[#242424]"
-                  aria-label={`Remove department filter ${department}`}
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </span>
-            ))}
-            {selectedTeams.map((team) => (
-              <span
-                key={`team-filter-${team}`}
-                className="inline-flex items-center gap-1.5 rounded-full border border-[#e5e7eb] bg-[#f4f4f5] py-1 pl-2.5 pr-1 text-xs font-medium text-[#242424]"
-              >
-                <span className="text-[#6b7280]">Team</span>
-                <span>{team}</span>
-                <button
-                  type="button"
-                  onClick={() => onRemoveTeam(team)}
-                  className="rounded-full p-1 text-[#8b8b8b] transition hover:bg-white hover:text-[#242424]"
-                  aria-label={`Remove team filter ${team}`}
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </span>
-            ))}
-          </>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
 function slugifyScopeName(name: string): string {
   return (
     name
@@ -3558,17 +3284,6 @@ function supportDemandAnswerKey(rawAnswer: string): SupportDemandSeriesKey | nul
   }
 
   return null;
-}
-
-function SectionHeader({ title, subtitle }: { title: string; subtitle: string }) {
-  return (
-    <div className="mb-4">
-      <h2 className="text-[1.4rem] font-semibold tracking-tight text-[#242424] md:text-[1.5rem]">
-        {title}
-      </h2>
-      <p className="mt-1 text-sm text-[#7a7a7a]">{subtitle}</p>
-    </div>
-  );
 }
 
 function roundToOne(value: number): number {
@@ -4794,95 +4509,9 @@ function PromptTechniqueTooltip({
   );
 }
 
-function CohortStackedTooltip({
-  active,
-  payload,
-  label,
-}: {
-  active?: boolean;
-  payload?: Array<{
-    color?: string;
-    dataKey?: string;
-    name?: string;
-    value?: number;
-    payload?: { cohort?: string; respondents?: number };
-  }>;
-  label?: string;
-}) {
-  const row = payload?.[0]?.payload;
-
-  if (!active || !row || !payload || payload.length === 0) {
-    return null;
-  }
-
-  return (
-    <div className="rounded-md bg-[#242424] px-4 py-3 text-sm text-white shadow-lg">
-      <div className="mb-2 font-semibold text-white">{label ?? row.cohort ?? 'Unknown cohort'}</div>
-      <div className="mb-2 text-white/80">{row.respondents ?? 0} respondents</div>
-      <div className="space-y-1.5">
-        {payload
-          .filter((entry) => Number(entry.value) > 0)
-          .sort((left, right) => Number(right.value ?? 0) - Number(left.value ?? 0))
-          .map((entry) => (
-            <div key={String(entry.dataKey)} className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
-                <span>{entry.name}</span>
-              </div>
-              <span>{Number(entry.value ?? 0).toFixed(1)}%</span>
-            </div>
-          ))}
-      </div>
-    </div>
-  );
-}
-
-function ImpactComparisonTooltip({
-  active,
-  payload,
-}: {
-  active?: boolean;
-  payload?: Array<{
-    color?: string;
-    dataKey?: string;
-    name?: string;
-    value?: number;
-    payload?: ImpactComparisonRow;
-  }>;
-}) {
-  const point = payload?.[0]?.payload;
-
-  if (!active || !point || !payload || payload.length === 0) {
-    return null;
-  }
-
-  return (
-    <div className="rounded-md bg-[#242424] px-4 py-3 text-sm text-white shadow-lg">
-      <div className="mb-2 font-semibold text-white">{point.label}</div>
-      <div className="space-y-1.5">
-        {payload.map((entry) => {
-          const share =
-            entry.dataKey === 'businessShare' ? point.businessShare : point.deliveryShare;
-          const count =
-            entry.dataKey === 'businessShare' ? point.businessCount : point.deliveryCount;
-
-          return (
-            <div key={String(entry.dataKey)} className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
-                <span>{entry.name}</span>
-              </div>
-              <span>{share.toFixed(1)}% ({count})</span>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 export default function OrganizationView() {
   const { individuals, rawResponses, resolvePersonName } = useSurveyData();
+  const { isSensitiveDataHidden } = useSensitiveData();
   const { clearPendingNavigation } = useNavigationPending();
   const [selectedToolDepartments, setSelectedToolDepartments] = useState<string[]>([]);
   const [selectedToolSeniorities, setSelectedToolSeniorities] = useState<string[]>([]);
@@ -6265,485 +5894,328 @@ export default function OrganizationView() {
     window.open(url, '_blank', 'noopener,noreferrer');
   };
 
-  const renderCultureLegendBadges = (
-    series: ReadonlyArray<{ key: string; label: string; color: string }>,
-  ) => (
-    <div className="mt-4 flex flex-wrap gap-2">
-      {series.map((entry) => (
-        <div
-          key={entry.key}
-          className="inline-flex items-center gap-2 rounded-full border border-[#e5e7eb] bg-[#fafafa] px-3 py-1.5 text-xs font-medium text-[#374151]"
-        >
-          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
-          <span>{entry.label}</span>
-        </div>
-      ))}
-    </div>
-  );
+  const buildImpactFilterProps = (key: ImpactFilterKey, label: string) => ({
+    respondentCount: filteredImpactResponses[key].length,
+    departmentOptions: impactDepartmentOptions,
+    teamOptions: impactTeamOptions,
+    selectedDepartments: impactDepartmentFilters[key],
+    selectedTeams: impactTeamFilters[key],
+    departmentAriaLabel: `Filter ${label} by departments`,
+    teamAriaLabel: `Filter ${label} by teams`,
+    onToggleDepartment: (value: string) => toggleImpactDepartment(key, value),
+    onToggleTeam: (value: string) => toggleImpactTeam(key, value),
+    onClearDepartments: () => clearImpactDepartments(key),
+    onClearTeams: () => clearImpactTeams(key),
+    onClearAll: () => clearImpactFilters(key),
+    onRemoveDepartment: (value: string) => removeImpactDepartment(key, value),
+    onRemoveTeam: (value: string) => removeImpactTeam(key, value),
+  });
 
-  const renderCultureCohortBadges = () => (
-    <div className="mt-4 flex flex-wrap gap-2">
-      <div className="inline-flex items-center gap-2 rounded-full border border-[#dbeafe] bg-[#eff6ff] px-3 py-1.5 text-xs font-medium text-[#1d4ed8]">
-        <span
-          className="h-2.5 w-2.5 rounded-full"
-          style={{ backgroundColor: IMPACT_COHORT_COLORS.business }}
-        />
-        <span>Business</span>
-      </div>
-      <div className="inline-flex items-center gap-2 rounded-full border border-[#ccfbf1] bg-[#f0fdfa] px-3 py-1.5 text-xs font-medium text-[#0f766e]">
-        <span
-          className="h-2.5 w-2.5 rounded-full"
-          style={{ backgroundColor: IMPACT_COHORT_COLORS.delivery }}
-        />
-        <span>Delivery & engineering</span>
-      </div>
-    </div>
-  );
-
-  const renderCultureStackedCard = <
-    Key extends string,
-    Row extends { cohort: string; respondents: number } & Record<Key, number>,
-  >({
-    filterKey,
-    title,
-    description,
-    ariaLabelBase,
-    data,
-    series,
-    stackId,
-    chartHeight = 260,
-  }: {
-    filterKey: CultureFilterKey;
-    title: string;
-    description: string;
-    ariaLabelBase: string;
-    data: Row[];
-    series: ReadonlyArray<{ key: Key; label: string; color: string }>;
-    stackId: string;
-    chartHeight?: number;
-  }) => (
-    <section className="mt-5 rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
-      <h3 className="text-lg font-semibold tracking-tight text-[#242424]">{title}</h3>
-      <p className="mt-1 text-sm text-[#7a7a7a]">{description}</p>
-
-      <DepartmentTeamFilters
-        respondentCount={filteredCultureResponses[filterKey].length}
-        departmentOptions={impactDepartmentOptions}
-        teamOptions={impactTeamOptions}
-        selectedDepartments={cultureDepartmentFilters[filterKey]}
-        selectedTeams={cultureTeamFilters[filterKey]}
-        departmentAriaLabel={`Filter ${ariaLabelBase} by departments`}
-        teamAriaLabel={`Filter ${ariaLabelBase} by teams`}
-        onToggleDepartment={(value) => toggleCultureDepartment(filterKey, value)}
-        onToggleTeam={(value) => toggleCultureTeam(filterKey, value)}
-        onClearDepartments={() => clearCultureDepartments(filterKey)}
-        onClearTeams={() => clearCultureTeams(filterKey)}
-        onClearAll={() => clearCultureFilters(filterKey)}
-        onRemoveDepartment={(value) => removeCultureDepartment(filterKey, value)}
-        onRemoveTeam={(value) => removeCultureTeam(filterKey, value)}
-      />
-
-      {renderCultureLegendBadges(series)}
-
-      <div className="mt-6" style={{ height: `${chartHeight}px` }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart
-            data={data}
-            layout="vertical"
-            margin={{ top: 10, right: 12, left: 20, bottom: 0 }}
-          >
-            <CartesianGrid stroke="#ececec" vertical={false} strokeDasharray="3 3" />
-            <XAxis
-              type="number"
-              domain={[0, 100]}
-              tickFormatter={(value) => `${value}%`}
-              tick={{ fontSize: 12, fill: '#737373' }}
-              axisLine={false}
-              tickLine={false}
-            />
-            <YAxis
-              type="category"
-              dataKey="cohort"
-              width={150}
-              tick={{ fontSize: 12, fill: '#525252' }}
-              axisLine={false}
-              tickLine={false}
-            />
-            <Tooltip isAnimationActive={false} content={<CohortStackedTooltip />} />
-            {series.map((entry, index) => (
-              <Bar
-                key={entry.key}
-                dataKey={entry.key}
-                name={entry.label}
-                stackId={stackId}
-                fill={entry.color}
-                radius={index === series.length - 1 ? [0, 8, 8, 0] : undefined}
-              />
-            ))}
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-    </section>
-  );
-
-  const renderCultureComparisonCard = ({
-    filterKey,
-    title,
-    description,
-    ariaLabelBase,
-    data,
-    chartHeight = 320,
-  }: {
-    filterKey: CultureFilterKey;
-    title: string;
-    description: string;
-    ariaLabelBase: string;
-    data: ImpactComparisonRow[];
-    chartHeight?: number;
-  }) => (
-    <section className="mt-5 rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
-      <h3 className="text-lg font-semibold tracking-tight text-[#242424]">{title}</h3>
-      <p className="mt-1 text-sm text-[#7a7a7a]">{description}</p>
-
-      <DepartmentTeamFilters
-        respondentCount={filteredCultureResponses[filterKey].length}
-        departmentOptions={impactDepartmentOptions}
-        teamOptions={impactTeamOptions}
-        selectedDepartments={cultureDepartmentFilters[filterKey]}
-        selectedTeams={cultureTeamFilters[filterKey]}
-        departmentAriaLabel={`Filter ${ariaLabelBase} by departments`}
-        teamAriaLabel={`Filter ${ariaLabelBase} by teams`}
-        onToggleDepartment={(value) => toggleCultureDepartment(filterKey, value)}
-        onToggleTeam={(value) => toggleCultureTeam(filterKey, value)}
-        onClearDepartments={() => clearCultureDepartments(filterKey)}
-        onClearTeams={() => clearCultureTeams(filterKey)}
-        onClearAll={() => clearCultureFilters(filterKey)}
-        onRemoveDepartment={(value) => removeCultureDepartment(filterKey, value)}
-        onRemoveTeam={(value) => removeCultureTeam(filterKey, value)}
-      />
-
-      {renderCultureCohortBadges()}
-
-      <div className="mt-6" style={{ height: `${chartHeight}px` }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart
-            data={data}
-            layout="vertical"
-            margin={{ top: 0, right: 12, left: 12, bottom: 0 }}
-            barCategoryGap={10}
-          >
-            <CartesianGrid stroke="#ececec" strokeDasharray="3 3" horizontal={false} />
-            <XAxis
-              type="number"
-              domain={[0, 100]}
-              tickFormatter={(value) => `${value}%`}
-              tick={{ fontSize: 12, fill: '#737373' }}
-              axisLine={false}
-              tickLine={false}
-            />
-            <YAxis
-              type="category"
-              dataKey="label"
-              width={220}
-              tick={{ fontSize: 12, fill: '#525252' }}
-              axisLine={false}
-              tickLine={false}
-            />
-            <Tooltip isAnimationActive={false} content={<ImpactComparisonTooltip />} />
-            <Bar
-              dataKey="businessShare"
-              name="Business"
-              fill={IMPACT_COHORT_COLORS.business}
-              radius={[0, 8, 8, 0]}
-            />
-            <Bar
-              dataKey="deliveryShare"
-              name="Delivery & engineering"
-              fill={IMPACT_COHORT_COLORS.delivery}
-              radius={[0, 8, 8, 0]}
-            />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-    </section>
-  );
-
-  const renderCultureSingleCohortCard = <
-    Key extends string,
-    Row extends { cohort: string; respondents: number } & Record<Key, number>,
-  >({
-    filterKey,
-    title,
-    description,
-    ariaLabelBase,
-    data,
-    series,
-    stackId,
-    emptyState,
+  const buildCultureFilterProps = (
+    key: CultureFilterKey,
+    label: string,
+    respondentCount = filteredCultureResponses[key].length,
+  ) => ({
     respondentCount,
-    cohortColor,
-    cohortLabel,
-    filterRespondentCount,
-    chartHeight = 240,
-  }: {
-    filterKey: CultureFilterKey;
-    title: string;
-    description: string;
-    ariaLabelBase: string;
-    data: Row[];
-    series: ReadonlyArray<{ key: Key; label: string; color: string }>;
-    stackId: string;
-    emptyState: string;
-    respondentCount: number;
-    cohortColor: string;
-    cohortLabel: string;
-    filterRespondentCount?: number;
-    chartHeight?: number;
-  }) => (
-    <section className="mt-5 rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
-      <h3 className="text-lg font-semibold tracking-tight text-[#242424]">{title}</h3>
-      <p className="mt-1 text-sm text-[#7a7a7a]">{description}</p>
+    departmentOptions: impactDepartmentOptions,
+    teamOptions: impactTeamOptions,
+    selectedDepartments: cultureDepartmentFilters[key],
+    selectedTeams: cultureTeamFilters[key],
+    departmentAriaLabel: `Filter ${label} by departments`,
+    teamAriaLabel: `Filter ${label} by teams`,
+    onToggleDepartment: (value: string) => toggleCultureDepartment(key, value),
+    onToggleTeam: (value: string) => toggleCultureTeam(key, value),
+    onClearDepartments: () => clearCultureDepartments(key),
+    onClearTeams: () => clearCultureTeams(key),
+    onClearAll: () => clearCultureFilters(key),
+    onRemoveDepartment: (value: string) => removeCultureDepartment(key, value),
+    onRemoveTeam: (value: string) => removeCultureTeam(key, value),
+  });
 
-      <DepartmentTeamFilters
-        respondentCount={filterRespondentCount ?? filteredCultureResponses[filterKey].length}
-        departmentOptions={impactDepartmentOptions}
-        teamOptions={impactTeamOptions}
-        selectedDepartments={cultureDepartmentFilters[filterKey]}
-        selectedTeams={cultureTeamFilters[filterKey]}
-        departmentAriaLabel={`Filter ${ariaLabelBase} by departments`}
-        teamAriaLabel={`Filter ${ariaLabelBase} by teams`}
-        onToggleDepartment={(value) => toggleCultureDepartment(filterKey, value)}
-        onToggleTeam={(value) => toggleCultureTeam(filterKey, value)}
-        onClearDepartments={() => clearCultureDepartments(filterKey)}
-        onClearTeams={() => clearCultureTeams(filterKey)}
-        onClearAll={() => clearCultureFilters(filterKey)}
-        onRemoveDepartment={(value) => removeCultureDepartment(filterKey, value)}
-        onRemoveTeam={(value) => removeCultureTeam(filterKey, value)}
-      />
+  const buildVisionFilterProps = (key: VisionFilterKey, label: string) => ({
+    respondentCount: filteredVisionResponses[key].length,
+    departmentOptions: impactDepartmentOptions,
+    teamOptions: impactTeamOptions,
+    selectedDepartments: visionDepartmentFilters[key],
+    selectedTeams: visionTeamFilters[key],
+    departmentAriaLabel: `Filter ${label} by departments`,
+    teamAriaLabel: `Filter ${label} by teams`,
+    onToggleDepartment: (value: string) => toggleVisionDepartment(key, value),
+    onToggleTeam: (value: string) => toggleVisionTeam(key, value),
+    onClearDepartments: () => clearVisionDepartments(key),
+    onClearTeams: () => clearVisionTeams(key),
+    onClearAll: () => clearVisionFilters(key),
+    onRemoveDepartment: (value: string) => removeVisionDepartment(key, value),
+    onRemoveTeam: (value: string) => removeVisionTeam(key, value),
+  });
 
-      {renderCultureLegendBadges(series)}
+  const impactSectionProps = {
+    personalOutputImpact: {
+      filterProps: buildImpactFilterProps('personalOutputImpact', 'personal output impact'),
+      data: personalOutputImpactDistribution,
+      series: PERSONAL_OUTPUT_IMPACT_SERIES,
+    },
+    workflowTransformation: {
+      filterProps: buildImpactFilterProps('workflowTransformation', 'workflow transformation depth'),
+      data: workflowTransformationDistribution,
+      series: WORKFLOW_TRANSFORMATION_SERIES,
+    },
+    hoursSaved: {
+      filterProps: buildImpactFilterProps('hoursSaved', 'hours saved per week'),
+      data: hoursSavedComparison,
+      filtersActive: hoursSavedFiltersActive,
+      averageSummary: hoursSavedAverageSummary,
+    },
+    dependencyOnAi: {
+      filterProps: buildImpactFilterProps('dependencyOnAi', 'dependency on AI'),
+      data: dependencyImpactDistribution,
+      series: DEPENDENCY_IMPACT_SERIES,
+    },
+    accessLicensing: {
+      filterProps: buildImpactFilterProps('accessLicensing', 'access and licensing'),
+      data: accessLicensingDistribution,
+      series: ACCESS_LICENSING_SERIES,
+    },
+    whoPays: {
+      filterProps: buildImpactFilterProps('whoPays', 'who pays for AI tools'),
+      data: whoPaysComparison,
+    },
+    costMaturity: {
+      filterProps: buildImpactFilterProps('costMaturity', 'cost maturity'),
+      data: costMaturityDistribution,
+      series: COST_MATURITY_SERIES,
+    },
+    deliveryPlanningImpact: {
+      filterProps: buildImpactFilterProps('planningImpact', 'delivery-only planning impact'),
+      data: deliveryPlanningImpactDistribution,
+      series: PLANNING_IMPACT_SERIES,
+      respondentCount: filteredDeliveryPlanningResponses.length,
+    },
+    nonAiBlocker: {
+      filterProps: buildImpactFilterProps('nonAiBlocker', 'biggest non-AI blocker'),
+      data: blockerComparison,
+    },
+    businessColor: IMPACT_COHORT_COLORS.business,
+    deliveryColor: IMPACT_COHORT_COLORS.delivery,
+  };
 
-      <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-[#e5e7eb] bg-[#fafafa] px-3 py-1.5 text-xs font-medium text-[#374151]">
-        <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: cohortColor }} />
-        <span>{cohortLabel}</span>
-      </div>
+  const cultureSectionProps = {
+    topChampionRows,
+    growthMomentum: {
+      title: 'AI growth momentum',
+      description:
+        'This is the best opener for Culture because it shows whether people feel stagnant, reactive, or actively growing.',
+      filterProps: buildCultureFilterProps('growthMomentum', 'AI growth momentum'),
+      data: growthMomentumDistribution,
+      series: GROWTH_MOMENTUM_SERIES,
+      stackId: 'culture-growth-momentum',
+    },
+    experimentationInitiative: {
+      title: 'Experimentation initiative',
+      description:
+        'This tells you whether people are waiting for permission or self-starting with new tools and workflows.',
+      filterProps: buildCultureFilterProps('experimentationInitiative', 'experimentation initiative'),
+      data: experimentationInitiativeDistribution,
+      series: EXPERIMENTATION_INITIATIVE_SERIES,
+      stackId: 'culture-experimentation-initiative',
+    },
+    knowledgeSharing: {
+      title: 'Knowledge sharing behavior',
+      description: 'This is the clearest “is AI practice social or still private?” chart.',
+      filterProps: buildCultureFilterProps('knowledgeSharing', 'knowledge sharing behavior'),
+      data: knowledgeSharingDistribution,
+      series: KNOWLEDGE_SHARING_SERIES,
+      stackId: 'culture-knowledge-sharing',
+    },
+    influenceScore: {
+      title: 'Adoption influence on others',
+      description: 'This is your strongest champion-spread signal.',
+      filterProps: buildCultureFilterProps('influenceScore', 'adoption influence on others'),
+      data: influenceScoreDistribution,
+      series: INFLUENCE_SCORE_SERIES,
+      stackId: 'culture-influence-score',
+    },
+    teamAiMaturity: {
+      title: 'Team AI maturity around me',
+      description:
+        'This gives the local culture climate view: do people feel surrounded by strong AI practice or not.',
+      filterProps: buildCultureFilterProps('teamAiMaturity', 'team AI maturity around me'),
+      data: teamAiMaturityDistribution,
+      series: TEAM_AI_MATURITY_SERIES,
+      stackId: 'culture-team-ai-maturity',
+    },
+    organizationalSupport: {
+      title: 'Organizational support for adoption',
+      description:
+        'This is the main culture-system chart: even if people want to adopt AI, do they feel backed by the org?',
+      filterProps: buildCultureFilterProps('organizationalSupport', 'organizational support for adoption'),
+      data: organizationalSupportDistribution,
+      series: ORGANIZATIONAL_SUPPORT_SERIES,
+      stackId: 'culture-organizational-support',
+    },
+    toolSatisfaction: {
+      title: 'Tool satisfaction',
+      description:
+        'Useful, but placed after support because it is more operational than cultural.',
+      filterProps: buildCultureFilterProps('toolSatisfaction', 'tool satisfaction'),
+      data: toolSatisfactionDistribution,
+      series: TOOL_SATISFACTION_SERIES,
+      stackId: 'culture-tool-satisfaction',
+    },
+    enjoyability: {
+      title: 'Does AI make work more enjoyable?',
+      description:
+        'This is a strong secondary culture signal because enjoyment usually tracks whether adoption feels energizing or draining.',
+      filterProps: buildCultureFilterProps('enjoyability', 'AI work enjoyability'),
+      data: enjoyabilityDistribution,
+      series: ENJOYABILITY_SERIES,
+      stackId: 'culture-enjoyability',
+    },
+    supportNeeded: {
+      title: 'Support needed right now',
+      description: 'This shows what kind of enablement people are actually asking for right now.',
+      filterProps: buildCultureFilterProps('supportNeeded', 'support needed right now'),
+      data: cultureSupportNeededComparison,
+      chartHeight: 300,
+    },
+    handsOnHelp: {
+      title: 'Hands-on help demand',
+      description:
+        'This is great for showing how much appetite there is for real enablement, not just passive resources.',
+      filterProps: buildCultureFilterProps('handsOnHelp', 'hands-on help demand'),
+      data: handsOnHelpComparison,
+      chartHeight: 280,
+    },
+    practiceResilience: {
+      title: 'Would practices survive if a key person left?',
+      description:
+        'This is one of the best Culture charts in the survey because it exposes dependency risk directly.',
+      filterProps: buildCultureFilterProps('practiceResilience', 'practice resilience if a key person left'),
+      data: practiceResilienceDistribution,
+      series: PRACTICE_RESILIENCE_SERIES,
+      stackId: 'culture-practice-resilience',
+    },
+    knowledgeArtifacts: {
+      title: 'Knowledge artifacts created',
+      description: 'This shows whether AI knowledge is becoming reusable and durable.',
+      filterProps: buildCultureFilterProps('knowledgeArtifacts', 'knowledge artifacts created'),
+      data: knowledgeArtifactDistribution,
+      series: KNOWLEDGE_ARTIFACT_SERIES,
+      stackId: 'culture-knowledge-artifacts',
+    },
+    deliveryAutomationSharing: {
+      title: 'Delivery-only shared automation building',
+      description: 'Very valuable, but delivery-specific.',
+      filterProps: buildCultureFilterProps(
+        'deliveryAutomationSharing',
+        'delivery shared automation building',
+        filteredDeliveryAutomationSharingResponses.length,
+      ),
+      data: deliveryAutomationSharingDistribution,
+      series: DELIVERY_AUTOMATION_SHARING_SERIES,
+      stackId: 'culture-delivery-automation-sharing',
+      emptyState: 'No delivery & engineering respondents match the current department and team filter.',
+      respondentCount: filteredDeliveryAutomationSharingResponses.length,
+      cohortColor: IMPACT_COHORT_COLORS.delivery,
+      cohortLabel: 'Delivery & engineering',
+    },
+    businessOnboarding: {
+      title: 'Business-only onboarding on AI practices',
+      description:
+        'This is the cleanest signal of whether AI practice is actually institutionalized for non-engineering teams.',
+      filterProps: buildCultureFilterProps(
+        'businessOnboarding',
+        'business onboarding on AI practices',
+        filteredBusinessOnboardingResponses.length,
+      ),
+      data: businessOnboardingDistribution,
+      series: BUSINESS_ONBOARDING_SERIES,
+      stackId: 'culture-business-onboarding',
+      emptyState: 'No business respondents match the current department and team filter.',
+      respondentCount: filteredBusinessOnboardingResponses.length,
+      cohortColor: IMPACT_COHORT_COLORS.business,
+      cohortLabel: 'Business',
+    },
+    businessColor: IMPACT_COHORT_COLORS.business,
+    deliveryColor: IMPACT_COHORT_COLORS.delivery,
+  };
 
-      {respondentCount > 0 ? (
-        <div className="mt-6" style={{ height: `${chartHeight}px` }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart
-              data={data}
-              layout="vertical"
-              margin={{ top: 10, right: 12, left: 20, bottom: 0 }}
-            >
-              <CartesianGrid stroke="#ececec" vertical={false} strokeDasharray="3 3" />
-              <XAxis
-                type="number"
-                domain={[0, 100]}
-                tickFormatter={(value) => `${value}%`}
-                tick={{ fontSize: 12, fill: '#737373' }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <YAxis
-                type="category"
-                dataKey="cohort"
-                width={150}
-                tick={{ fontSize: 12, fill: '#525252' }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <Tooltip isAnimationActive={false} content={<CohortStackedTooltip />} />
-              {series.map((entry, index) => (
-                <Bar
-                  key={entry.key}
-                  dataKey={entry.key}
-                  name={entry.label}
-                  stackId={stackId}
-                  fill={entry.color}
-                  radius={index === series.length - 1 ? [0, 8, 8, 0] : undefined}
-                />
-              ))}
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      ) : (
-        <div className="mt-6 flex min-h-[140px] items-center justify-center rounded-2xl border border-dashed border-[#d4d4d8] bg-[#fafafa] px-6 text-center text-sm text-[#7a7a7a]">
-          {emptyState}
-        </div>
-      )}
-    </section>
-  );
-
-  const renderVisionStackedCard = <
-    Key extends string,
-    Row extends { cohort: string; respondents: number } & Record<Key, number>,
-  >({
-    filterKey,
-    title,
-    description,
-    ariaLabelBase,
-    data,
-    series,
-    stackId,
-    chartHeight = 260,
-  }: {
-    filterKey: VisionFilterKey;
-    title: string;
-    description: string;
-    ariaLabelBase: string;
-    data: Row[];
-    series: ReadonlyArray<{ key: Key; label: string; color: string }>;
-    stackId: string;
-    chartHeight?: number;
-  }) => (
-    <section className="mt-5 rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
-      <h3 className="text-lg font-semibold tracking-tight text-[#242424]">{title}</h3>
-      <p className="mt-1 text-sm text-[#7a7a7a]">{description}</p>
-
-      <DepartmentTeamFilters
-        respondentCount={filteredVisionResponses[filterKey].length}
-        departmentOptions={impactDepartmentOptions}
-        teamOptions={impactTeamOptions}
-        selectedDepartments={visionDepartmentFilters[filterKey]}
-        selectedTeams={visionTeamFilters[filterKey]}
-        departmentAriaLabel={`Filter ${ariaLabelBase} by departments`}
-        teamAriaLabel={`Filter ${ariaLabelBase} by teams`}
-        onToggleDepartment={(value) => toggleVisionDepartment(filterKey, value)}
-        onToggleTeam={(value) => toggleVisionTeam(filterKey, value)}
-        onClearDepartments={() => clearVisionDepartments(filterKey)}
-        onClearTeams={() => clearVisionTeams(filterKey)}
-        onClearAll={() => clearVisionFilters(filterKey)}
-        onRemoveDepartment={(value) => removeVisionDepartment(filterKey, value)}
-        onRemoveTeam={(value) => removeVisionTeam(filterKey, value)}
-      />
-
-      {renderCultureLegendBadges(series)}
-
-      <div className="mt-6" style={{ height: `${chartHeight}px` }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart
-            data={data}
-            layout="vertical"
-            margin={{ top: 10, right: 12, left: 20, bottom: 0 }}
-          >
-            <CartesianGrid stroke="#ececec" vertical={false} strokeDasharray="3 3" />
-            <XAxis
-              type="number"
-              domain={[0, 100]}
-              tickFormatter={(value) => `${value}%`}
-              tick={{ fontSize: 12, fill: '#737373' }}
-              axisLine={false}
-              tickLine={false}
-            />
-            <YAxis
-              type="category"
-              dataKey="cohort"
-              width={150}
-              tick={{ fontSize: 12, fill: '#525252' }}
-              axisLine={false}
-              tickLine={false}
-            />
-            <Tooltip isAnimationActive={false} content={<CohortStackedTooltip />} />
-            {series.map((entry, index) => (
-              <Bar
-                key={entry.key}
-                dataKey={entry.key}
-                name={entry.label}
-                stackId={stackId}
-                fill={entry.color}
-                radius={index === series.length - 1 ? [0, 8, 8, 0] : undefined}
-              />
-            ))}
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-    </section>
-  );
-
-  const renderVisionComparisonCard = ({
-    filterKey,
-    title,
-    description,
-    ariaLabelBase,
-    data,
-    chartHeight = 320,
-    labelWidth = 220,
-  }: {
-    filterKey: VisionFilterKey;
-    title: string;
-    description: string;
-    ariaLabelBase: string;
-    data: ImpactComparisonRow[] | VisionActionMixComparisonRow[];
-    chartHeight?: number;
-    labelWidth?: number;
-  }) => (
-    <section className="mt-5 rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
-      <h3 className="text-lg font-semibold tracking-tight text-[#242424]">{title}</h3>
-      <p className="mt-1 text-sm text-[#7a7a7a]">{description}</p>
-
-      <DepartmentTeamFilters
-        respondentCount={filteredVisionResponses[filterKey].length}
-        departmentOptions={impactDepartmentOptions}
-        teamOptions={impactTeamOptions}
-        selectedDepartments={visionDepartmentFilters[filterKey]}
-        selectedTeams={visionTeamFilters[filterKey]}
-        departmentAriaLabel={`Filter ${ariaLabelBase} by departments`}
-        teamAriaLabel={`Filter ${ariaLabelBase} by teams`}
-        onToggleDepartment={(value) => toggleVisionDepartment(filterKey, value)}
-        onToggleTeam={(value) => toggleVisionTeam(filterKey, value)}
-        onClearDepartments={() => clearVisionDepartments(filterKey)}
-        onClearTeams={() => clearVisionTeams(filterKey)}
-        onClearAll={() => clearVisionFilters(filterKey)}
-        onRemoveDepartment={(value) => removeVisionDepartment(filterKey, value)}
-        onRemoveTeam={(value) => removeVisionTeam(filterKey, value)}
-      />
-
-      {renderCultureCohortBadges()}
-
-      <div className="mt-6" style={{ height: `${chartHeight}px` }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart
-            data={data}
-            layout="vertical"
-            margin={{ top: 0, right: 12, left: 12, bottom: 0 }}
-            barCategoryGap={10}
-          >
-            <CartesianGrid stroke="#ececec" strokeDasharray="3 3" horizontal={false} />
-            <XAxis
-              type="number"
-              domain={[0, 100]}
-              tickFormatter={(value) => `${value}%`}
-              tick={{ fontSize: 12, fill: '#737373' }}
-              axisLine={false}
-              tickLine={false}
-            />
-            <YAxis
-              type="category"
-              dataKey="label"
-              width={labelWidth}
-              tick={{ fontSize: 12, fill: '#525252' }}
-              axisLine={false}
-              tickLine={false}
-            />
-            <Tooltip isAnimationActive={false} content={<ImpactComparisonTooltip />} />
-            <Bar
-              dataKey="businessShare"
-              name="Business"
-              fill={IMPACT_COHORT_COLORS.business}
-              radius={[0, 8, 8, 0]}
-            />
-            <Bar
-              dataKey="deliveryShare"
-              name="Delivery & engineering"
-              fill={IMPACT_COHORT_COLORS.delivery}
-              radius={[0, 8, 8, 0]}
-            />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-    </section>
-  );
+  const visionSectionProps = {
+    opportunityClarity: {
+      title: 'Opportunity clarity',
+      description:
+        'This should open the section because it answers the core question: do people clearly see where more AI value could come from in the next 6 months?',
+      filterProps: buildVisionFilterProps('opportunityClarity', 'opportunity clarity'),
+      data: opportunityClarityDistribution,
+      series: OPPORTUNITY_CLARITY_SERIES,
+      stackId: 'vision-opportunity-clarity',
+    },
+    actionPriorities: {
+      title: 'Next-quarter action priorities',
+      description:
+        'This is probably the most practical chart in the whole section because it turns Vision into specific near-term interventions.',
+      filterProps: buildVisionFilterProps('actionPriorities', 'next-quarter action priorities'),
+      data: visionActionPrioritiesComparison,
+      chartHeight: 560,
+      labelWidth: 340,
+    },
+    workChangeImagination: {
+      title: 'How people imagine work changing',
+      description:
+        'This shows whether people still think in “AI speeds up tasks” mode or whether they can imagine genuinely different workflows.',
+      filterProps: buildVisionFilterProps('workChangeImagination', 'how people imagine work changing'),
+      data: workChangeImaginationDistribution,
+      series: WORK_CHANGE_IMAGINATION_SERIES,
+      stackId: 'vision-work-change-imagination',
+    },
+    opportunitySelectionMaturity: {
+      title: 'Opportunity selection maturity',
+      description:
+        'This shows whether people choose AI opportunities based on hype, personal curiosity, or real value and feasibility thinking.',
+      filterProps: buildVisionFilterProps('opportunitySelectionMaturity', 'opportunity selection maturity'),
+      data: opportunitySelectionDistribution,
+      series: OPPORTUNITY_SELECTION_SERIES,
+      stackId: 'vision-opportunity-selection',
+      chartHeight: 280,
+    },
+    businessValueConnection: {
+      title: 'Ability to connect AI to business value',
+      description:
+        'This is one of the strongest leadership-facing Vision charts because it shows whether AI is framed as personal productivity or as business, project, client, or team value.',
+      filterProps: buildVisionFilterProps('businessValueConnection', 'ability to connect AI to business value'),
+      data: businessValueConnectionDistribution,
+      series: BUSINESS_VALUE_CONNECTION_SERIES,
+      stackId: 'vision-business-value-connection',
+      chartHeight: 280,
+    },
+    personalDevelopmentDirection: {
+      title: 'Personal development direction',
+      description:
+        'This shows whether people know what capability they want to build next, which is a strong forward-readiness signal.',
+      filterProps: buildVisionFilterProps('personalDevelopmentDirection', 'personal development direction'),
+      data: personalDevelopmentDirectionDistribution,
+      series: PERSONAL_DEVELOPMENT_DIRECTION_SERIES,
+      stackId: 'vision-personal-development-direction',
+      chartHeight: 280,
+    },
+    visionReadiness: {
+      filterProps: buildVisionFilterProps('visionReadiness', 'vision readiness score'),
+      data: visionReadinessDistribution,
+      series: VISION_READINESS_SERIES,
+      averageSummary: visionReadinessAverageSummary,
+    },
+    visionActionMix: {
+      title: 'Vision action mix',
+      description:
+        'This is a more executive-friendly version of the action-priority view, showing whether the organization’s next-step thinking is concentrated on workflow change, enablement, governance, or broader strategy.',
+      filterProps: buildVisionFilterProps('visionActionMix', 'vision action mix'),
+      data: visionActionMixComparison,
+      chartHeight: 260,
+      labelWidth: 170,
+    },
+    businessColor: IMPACT_COHORT_COLORS.business,
+    deliveryColor: IMPACT_COHORT_COLORS.delivery,
+  };
 
   return (
     <div className="relative">
@@ -7258,11 +6730,17 @@ export default function OrganizationView() {
                       <div className="flex items-center gap-3">
                         <ProjectAvatar name={project.name} />
                         <div className="flex min-w-0 items-center gap-2">
-                          <span className="truncate">{project.name}</span>
+                          <SensitiveText as="span" hidden={isSensitiveDataHidden} className="truncate">
+                            {project.name}
+                          </SensitiveText>
                           <Link
                             to={`/teams?scope=team&scopeId=${project.id}`}
                             className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[#8b8b8b] transition-colors hover:bg-[#f5f5f5] hover:text-[#525252]"
-                            aria-label={`Open ${project.name} in Team Scores`}
+                            aria-label={
+                              isSensitiveDataHidden
+                                ? 'Open project in Team Scores'
+                                : `Open ${project.name} in Team Scores`
+                            }
                             title="Open in Team Scores"
                           >
                             <svg
@@ -7546,7 +7024,9 @@ export default function OrganizationView() {
                       className="inline-flex items-center gap-1.5 rounded-full border border-[#e5e7eb] bg-[#f4f4f5] py-1 pl-2.5 pr-1 text-xs font-medium text-[#242424]"
                     >
                       <span className="text-[#6b7280]">Team</span>
-                      <span>{team}</span>
+                      <SensitiveText as="span" hidden={isSensitiveDataHidden}>
+                        {team}
+                      </SensitiveText>
                       <button
                         type="button"
                         onClick={() =>
@@ -7699,7 +7179,9 @@ export default function OrganizationView() {
                       className="inline-flex items-center gap-1.5 rounded-full border border-[#e5e7eb] bg-[#f4f4f5] py-1 pl-2.5 pr-1 text-xs font-medium text-[#242424]"
                     >
                       <span className="text-[#6b7280]">Team</span>
-                      <span>{team}</span>
+                      <SensitiveText as="span" hidden={isSensitiveDataHidden}>
+                        {team}
+                      </SensitiveText>
                       <button
                         type="button"
                         onClick={() =>
@@ -7859,7 +7341,9 @@ export default function OrganizationView() {
                       className="inline-flex items-center gap-1.5 rounded-full border border-[#e5e7eb] bg-[#f4f4f5] py-1 pl-2.5 pr-1 text-xs font-medium text-[#242424]"
                     >
                       <span className="text-[#6b7280]">Team</span>
-                      <span>{team}</span>
+                      <SensitiveText as="span" hidden={isSensitiveDataHidden}>
+                        {team}
+                      </SensitiveText>
                       <button
                         type="button"
                         onClick={() =>
@@ -8046,7 +7530,9 @@ export default function OrganizationView() {
                         className="inline-flex items-center gap-1.5 rounded-full border border-[#e5e7eb] bg-[#f4f4f5] py-1 pl-2.5 pr-1 text-xs font-medium text-[#242424]"
                       >
                         <span className="text-[#6b7280]">Team</span>
-                        <span>{team}</span>
+                        <SensitiveText as="span" hidden={isSensitiveDataHidden}>
+                          {team}
+                        </SensitiveText>
                         <button
                           type="button"
                           onClick={() =>
@@ -8208,7 +7694,9 @@ export default function OrganizationView() {
                         className="inline-flex items-center gap-1.5 rounded-full border border-[#e5e7eb] bg-[#f4f4f5] py-1 pl-2.5 pr-1 text-xs font-medium text-[#242424]"
                       >
                         <span className="text-[#6b7280]">Team</span>
-                        <span>{team}</span>
+                        <SensitiveText as="span" hidden={isSensitiveDataHidden}>
+                          {team}
+                        </SensitiveText>
                         <button
                           type="button"
                           onClick={() =>
@@ -8338,7 +7826,9 @@ export default function OrganizationView() {
                       className="inline-flex items-center gap-1.5 rounded-full border border-[#e5e7eb] bg-[#f4f4f5] py-1 pl-2.5 pr-1 text-xs font-medium text-[#242424]"
                     >
                       <span className="text-[#6b7280]">Team</span>
-                      <span>{team}</span>
+                      <SensitiveText as="span" hidden={isSensitiveDataHidden}>
+                        {team}
+                      </SensitiveText>
                       <button
                         type="button"
                         onClick={() =>
@@ -8494,7 +7984,9 @@ export default function OrganizationView() {
                       className="inline-flex items-center gap-1.5 rounded-full border border-[#e5e7eb] bg-[#f4f4f5] py-1 pl-2.5 pr-1 text-xs font-medium text-[#242424]"
                     >
                       <span className="text-[#6b7280]">Team</span>
-                      <span>{team}</span>
+                      <SensitiveText as="span" hidden={isSensitiveDataHidden}>
+                        {team}
+                      </SensitiveText>
                       <button
                         type="button"
                         onClick={() =>
@@ -8572,1111 +8064,11 @@ export default function OrganizationView() {
         </section>
       </section>
 
-      <section id="org-dimension-impact" className="mt-8 scroll-mt-24">
-        <SectionHeader
-          title="Dimension 3: Impact"
-          subtitle="See where AI is already creating visible value, changing workflows, saving time, and where that value is still constrained by access, cost, or operating blockers."
-        />
+      <OrganizationDimensionImpactSection {...impactSectionProps} />
 
-        <section className="rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
-          <h3 className="text-lg font-semibold tracking-tight text-[#242424]">
-            Personal output impact
-          </h3>
-          <p className="mt-1 text-sm text-[#7a7a7a]">
-            This is the clearest top-line &quot;is AI actually helping?&quot; chart, and the answer ladders already align well.
-          </p>
+      <OrganizationDimensionCultureSection {...cultureSectionProps} />
 
-          <DepartmentTeamFilters
-            respondentCount={filteredImpactResponses.personalOutputImpact.length}
-            departmentOptions={impactDepartmentOptions}
-            teamOptions={impactTeamOptions}
-            selectedDepartments={impactDepartmentFilters.personalOutputImpact}
-            selectedTeams={impactTeamFilters.personalOutputImpact}
-            departmentAriaLabel="Filter personal output impact by departments"
-            teamAriaLabel="Filter personal output impact by teams"
-            onToggleDepartment={(value) => toggleImpactDepartment('personalOutputImpact', value)}
-            onToggleTeam={(value) => toggleImpactTeam('personalOutputImpact', value)}
-            onClearDepartments={() => clearImpactDepartments('personalOutputImpact')}
-            onClearTeams={() => clearImpactTeams('personalOutputImpact')}
-            onClearAll={() => clearImpactFilters('personalOutputImpact')}
-            onRemoveDepartment={(value) => removeImpactDepartment('personalOutputImpact', value)}
-            onRemoveTeam={(value) => removeImpactTeam('personalOutputImpact', value)}
-          />
-
-          <div className="mt-4 flex flex-wrap gap-2">
-            {PERSONAL_OUTPUT_IMPACT_SERIES.map((series) => (
-              <div
-                key={series.key}
-                className="inline-flex items-center gap-2 rounded-full border border-[#e5e7eb] bg-[#fafafa] px-3 py-1.5 text-xs font-medium text-[#374151]"
-              >
-                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: series.color }} />
-                <span>{series.label}</span>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-6 h-[260px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={personalOutputImpactDistribution}
-                layout="vertical"
-                margin={{ top: 10, right: 12, left: 20, bottom: 0 }}
-              >
-                <CartesianGrid stroke="#ececec" vertical={false} strokeDasharray="3 3" />
-                <XAxis
-                  type="number"
-                  domain={[0, 100]}
-                  tickFormatter={(value) => `${value}%`}
-                  tick={{ fontSize: 12, fill: '#737373' }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  type="category"
-                  dataKey="cohort"
-                  width={150}
-                  tick={{ fontSize: 12, fill: '#525252' }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <Tooltip isAnimationActive={false} content={<CohortStackedTooltip />} />
-                {PERSONAL_OUTPUT_IMPACT_SERIES.map((series, index) => (
-                  <Bar
-                    key={series.key}
-                    dataKey={series.key}
-                    name={series.label}
-                    stackId="personal-output-impact"
-                    fill={series.color}
-                    radius={
-                      index === PERSONAL_OUTPUT_IMPACT_SERIES.length - 1 ? [0, 8, 8, 0] : undefined
-                    }
-                  />
-                ))}
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </section>
-
-        <section className="mt-5 rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
-          <h3 className="text-lg font-semibold tracking-tight text-[#242424]">
-            Workflow transformation depth
-          </h3>
-          <p className="mt-1 text-sm text-[#7a7a7a]">
-            This shows whether AI is just speeding work up, or actually changing how work gets done. It&apos;s a stronger impact signal than simple satisfaction.
-          </p>
-
-          <DepartmentTeamFilters
-            respondentCount={filteredImpactResponses.workflowTransformation.length}
-            departmentOptions={impactDepartmentOptions}
-            teamOptions={impactTeamOptions}
-            selectedDepartments={impactDepartmentFilters.workflowTransformation}
-            selectedTeams={impactTeamFilters.workflowTransformation}
-            departmentAriaLabel="Filter workflow transformation depth by departments"
-            teamAriaLabel="Filter workflow transformation depth by teams"
-            onToggleDepartment={(value) => toggleImpactDepartment('workflowTransformation', value)}
-            onToggleTeam={(value) => toggleImpactTeam('workflowTransformation', value)}
-            onClearDepartments={() => clearImpactDepartments('workflowTransformation')}
-            onClearTeams={() => clearImpactTeams('workflowTransformation')}
-            onClearAll={() => clearImpactFilters('workflowTransformation')}
-            onRemoveDepartment={(value) => removeImpactDepartment('workflowTransformation', value)}
-            onRemoveTeam={(value) => removeImpactTeam('workflowTransformation', value)}
-          />
-
-          <div className="mt-4 flex flex-wrap gap-2">
-            {WORKFLOW_TRANSFORMATION_SERIES.map((series) => (
-              <div
-                key={series.key}
-                className="inline-flex items-center gap-2 rounded-full border border-[#e5e7eb] bg-[#fafafa] px-3 py-1.5 text-xs font-medium text-[#374151]"
-              >
-                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: series.color }} />
-                <span>{series.label}</span>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-6 h-[260px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={workflowTransformationDistribution}
-                layout="vertical"
-                margin={{ top: 10, right: 12, left: 20, bottom: 0 }}
-              >
-                <CartesianGrid stroke="#ececec" vertical={false} strokeDasharray="3 3" />
-                <XAxis
-                  type="number"
-                  domain={[0, 100]}
-                  tickFormatter={(value) => `${value}%`}
-                  tick={{ fontSize: 12, fill: '#737373' }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  type="category"
-                  dataKey="cohort"
-                  width={150}
-                  tick={{ fontSize: 12, fill: '#525252' }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <Tooltip isAnimationActive={false} content={<CohortStackedTooltip />} />
-                {WORKFLOW_TRANSFORMATION_SERIES.map((series, index) => (
-                  <Bar
-                    key={series.key}
-                    dataKey={series.key}
-                    name={series.label}
-                    stackId="workflow-transformation"
-                    fill={series.color}
-                    radius={
-                      index === WORKFLOW_TRANSFORMATION_SERIES.length - 1 ? [0, 8, 8, 0] : undefined
-                    }
-                  />
-                ))}
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </section>
-
-        <section className="mt-5 rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
-          <h3 className="text-lg font-semibold tracking-tight text-[#242424]">
-            Hours saved per week
-          </h3>
-          <p className="mt-1 text-sm text-[#7a7a7a]">
-            This gives a very concrete value chart and pairs well with the first two.
-          </p>
-
-          <DepartmentTeamFilters
-            respondentCount={filteredImpactResponses.hoursSaved.length}
-            departmentOptions={impactDepartmentOptions}
-            teamOptions={impactTeamOptions}
-            selectedDepartments={impactDepartmentFilters.hoursSaved}
-            selectedTeams={impactTeamFilters.hoursSaved}
-            departmentAriaLabel="Filter hours saved per week by departments"
-            teamAriaLabel="Filter hours saved per week by teams"
-            onToggleDepartment={(value) => toggleImpactDepartment('hoursSaved', value)}
-            onToggleTeam={(value) => toggleImpactTeam('hoursSaved', value)}
-            onClearDepartments={() => clearImpactDepartments('hoursSaved')}
-            onClearTeams={() => clearImpactTeams('hoursSaved')}
-            onClearAll={() => clearImpactFilters('hoursSaved')}
-            onRemoveDepartment={(value) => removeImpactDepartment('hoursSaved', value)}
-            onRemoveTeam={(value) => removeImpactTeam('hoursSaved', value)}
-          />
-
-          <div className="mt-4 flex flex-wrap gap-2">
-            <div className="inline-flex items-center gap-2 rounded-full border border-[#dbeafe] bg-[#eff6ff] px-3 py-1.5 text-xs font-medium text-[#1d4ed8]">
-              <span
-                className="h-2.5 w-2.5 rounded-full"
-                style={{ backgroundColor: IMPACT_COHORT_COLORS.business }}
-              />
-              <span>Business</span>
-            </div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-[#ccfbf1] bg-[#f0fdfa] px-3 py-1.5 text-xs font-medium text-[#0f766e]">
-              <span
-                className="h-2.5 w-2.5 rounded-full"
-                style={{ backgroundColor: IMPACT_COHORT_COLORS.delivery }}
-              />
-              <span>Delivery & engineering</span>
-            </div>
-          </div>
-
-          {hoursSavedFiltersActive ? (
-            <div className="mt-4 flex flex-wrap items-center gap-2 rounded-2xl border border-[#e5e7eb] bg-[#fcfcfc] px-4 py-3 text-sm text-[#525252]">
-              <span className="font-medium text-[#242424]">Filter avg vs org avg:</span>
-              {hoursSavedAverageSummary.map((entry) => {
-                const deltaTone =
-                  entry.delta === null
-                    ? 'text-[#8b8b8b]'
-                    : entry.delta > 0
-                      ? 'text-[#0f766e]'
-                      : entry.delta < 0
-                        ? 'text-[#b45309]'
-                        : 'text-[#6b7280]';
-
-                return (
-                  <span
-                    key={`hours-saved-average-${entry.cohort}`}
-                    className="inline-flex items-center gap-2 rounded-full border border-[#e5e7eb] bg-white px-3 py-1.5"
-                  >
-                    <span
-                      className="h-2.5 w-2.5 rounded-full"
-                      style={{ backgroundColor: entry.color }}
-                    />
-                    <span className="font-medium text-[#242424]">{entry.cohort}</span>
-                    <span>
-                      {entry.filteredAverage !== null ? `${entry.filteredAverage.toFixed(1)}h` : '—'}
-                    </span>
-                    <span className="text-[#a1a1aa]">vs</span>
-                    <span>
-                      {entry.overallAverage !== null ? `${entry.overallAverage.toFixed(1)}h` : '—'}
-                    </span>
-                    {entry.delta !== null ? (
-                      <span className={`font-medium ${deltaTone}`}>
-                        ({entry.delta > 0 ? '+' : ''}
-                        {entry.delta.toFixed(1)}h)
-                      </span>
-                    ) : null}
-                  </span>
-                );
-              })}
-            </div>
-          ) : null}
-
-          <div className="mt-6 h-[320px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={hoursSavedComparison}
-                layout="vertical"
-                margin={{ top: 0, right: 12, left: 12, bottom: 0 }}
-                barCategoryGap={10}
-              >
-                <CartesianGrid stroke="#ececec" strokeDasharray="3 3" horizontal={false} />
-                <XAxis
-                  type="number"
-                  domain={[0, 100]}
-                  tickFormatter={(value) => `${value}%`}
-                  tick={{ fontSize: 12, fill: '#737373' }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  type="category"
-                  dataKey="label"
-                  width={150}
-                  tick={{ fontSize: 12, fill: '#525252' }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <Tooltip isAnimationActive={false} content={<ImpactComparisonTooltip />} />
-                <Bar
-                  dataKey="businessShare"
-                  name="Business"
-                  fill={IMPACT_COHORT_COLORS.business}
-                  radius={[0, 8, 8, 0]}
-                />
-                <Bar
-                  dataKey="deliveryShare"
-                  name="Delivery & engineering"
-                  fill={IMPACT_COHORT_COLORS.delivery}
-                  radius={[0, 8, 8, 0]}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </section>
-
-        <section className="mt-5 rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
-          <h3 className="text-lg font-semibold tracking-tight text-[#242424]">
-            Dependency on AI if removed tomorrow
-          </h3>
-          <p className="mt-1 text-sm text-[#7a7a7a]">
-            This is a great &quot;how embedded is the value?&quot; chart, and it complements the hours-saved chart really well.
-          </p>
-
-          <DepartmentTeamFilters
-            respondentCount={filteredImpactResponses.dependencyOnAi.length}
-            departmentOptions={impactDepartmentOptions}
-            teamOptions={impactTeamOptions}
-            selectedDepartments={impactDepartmentFilters.dependencyOnAi}
-            selectedTeams={impactTeamFilters.dependencyOnAi}
-            departmentAriaLabel="Filter dependency on AI by departments"
-            teamAriaLabel="Filter dependency on AI by teams"
-            onToggleDepartment={(value) => toggleImpactDepartment('dependencyOnAi', value)}
-            onToggleTeam={(value) => toggleImpactTeam('dependencyOnAi', value)}
-            onClearDepartments={() => clearImpactDepartments('dependencyOnAi')}
-            onClearTeams={() => clearImpactTeams('dependencyOnAi')}
-            onClearAll={() => clearImpactFilters('dependencyOnAi')}
-            onRemoveDepartment={(value) => removeImpactDepartment('dependencyOnAi', value)}
-            onRemoveTeam={(value) => removeImpactTeam('dependencyOnAi', value)}
-          />
-
-          <div className="mt-4 flex flex-wrap gap-2">
-            {DEPENDENCY_IMPACT_SERIES.map((series) => (
-              <div
-                key={series.key}
-                className="inline-flex items-center gap-2 rounded-full border border-[#e5e7eb] bg-[#fafafa] px-3 py-1.5 text-xs font-medium text-[#374151]"
-              >
-                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: series.color }} />
-                <span>{series.label}</span>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-6 h-[260px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={dependencyImpactDistribution}
-                layout="vertical"
-                margin={{ top: 10, right: 12, left: 20, bottom: 0 }}
-              >
-                <CartesianGrid stroke="#ececec" vertical={false} strokeDasharray="3 3" />
-                <XAxis
-                  type="number"
-                  domain={[0, 100]}
-                  tickFormatter={(value) => `${value}%`}
-                  tick={{ fontSize: 12, fill: '#737373' }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  type="category"
-                  dataKey="cohort"
-                  width={150}
-                  tick={{ fontSize: 12, fill: '#525252' }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <Tooltip isAnimationActive={false} content={<CohortStackedTooltip />} />
-                {DEPENDENCY_IMPACT_SERIES.map((series, index) => (
-                  <Bar
-                    key={series.key}
-                    dataKey={series.key}
-                    name={series.label}
-                    stackId="dependency-impact"
-                    fill={series.color}
-                    radius={
-                      index === DEPENDENCY_IMPACT_SERIES.length - 1 ? [0, 8, 8, 0] : undefined
-                    }
-                  />
-                ))}
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </section>
-
-        <section className="mt-5 rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
-          <h3 className="text-lg font-semibold tracking-tight text-[#242424]">
-            Access and licensing
-          </h3>
-          <p className="mt-1 text-sm text-[#7a7a7a]">
-            This shows whether impact is already supported by tool access, or still constrained by licensing and visibility.
-          </p>
-
-          <DepartmentTeamFilters
-            respondentCount={filteredImpactResponses.accessLicensing.length}
-            departmentOptions={impactDepartmentOptions}
-            teamOptions={impactTeamOptions}
-            selectedDepartments={impactDepartmentFilters.accessLicensing}
-            selectedTeams={impactTeamFilters.accessLicensing}
-            departmentAriaLabel="Filter access and licensing by departments"
-            teamAriaLabel="Filter access and licensing by teams"
-            onToggleDepartment={(value) => toggleImpactDepartment('accessLicensing', value)}
-            onToggleTeam={(value) => toggleImpactTeam('accessLicensing', value)}
-            onClearDepartments={() => clearImpactDepartments('accessLicensing')}
-            onClearTeams={() => clearImpactTeams('accessLicensing')}
-            onClearAll={() => clearImpactFilters('accessLicensing')}
-            onRemoveDepartment={(value) => removeImpactDepartment('accessLicensing', value)}
-            onRemoveTeam={(value) => removeImpactTeam('accessLicensing', value)}
-          />
-
-          <div className="mt-4 flex flex-wrap gap-2">
-            {ACCESS_LICENSING_SERIES.map((series) => (
-              <div
-                key={series.key}
-                className="inline-flex items-center gap-2 rounded-full border border-[#e5e7eb] bg-[#fafafa] px-3 py-1.5 text-xs font-medium text-[#374151]"
-              >
-                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: series.color }} />
-                <span>{series.label}</span>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-6 h-[260px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={accessLicensingDistribution}
-                layout="vertical"
-                margin={{ top: 10, right: 12, left: 20, bottom: 0 }}
-              >
-                <CartesianGrid stroke="#ececec" vertical={false} strokeDasharray="3 3" />
-                <XAxis
-                  type="number"
-                  domain={[0, 100]}
-                  tickFormatter={(value) => `${value}%`}
-                  tick={{ fontSize: 12, fill: '#737373' }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  type="category"
-                  dataKey="cohort"
-                  width={150}
-                  tick={{ fontSize: 12, fill: '#525252' }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <Tooltip isAnimationActive={false} content={<CohortStackedTooltip />} />
-                {ACCESS_LICENSING_SERIES.map((series, index) => (
-                  <Bar
-                    key={series.key}
-                    dataKey={series.key}
-                    name={series.label}
-                    stackId="access-licensing"
-                    fill={series.color}
-                    radius={
-                      index === ACCESS_LICENSING_SERIES.length - 1 ? [0, 8, 8, 0] : undefined
-                    }
-                  />
-                ))}
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </section>
-
-        <section className="mt-5 rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
-          <h3 className="text-lg font-semibold tracking-tight text-[#242424]">
-            Who pays for AI tools
-          </h3>
-          <p className="mt-1 text-sm text-[#7a7a7a]">
-            This is useful as an operational subplot, especially if we want to explain why adoption differs across teams.
-          </p>
-
-          <DepartmentTeamFilters
-            respondentCount={filteredImpactResponses.whoPays.length}
-            departmentOptions={impactDepartmentOptions}
-            teamOptions={impactTeamOptions}
-            selectedDepartments={impactDepartmentFilters.whoPays}
-            selectedTeams={impactTeamFilters.whoPays}
-            departmentAriaLabel="Filter who pays for AI tools by departments"
-            teamAriaLabel="Filter who pays for AI tools by teams"
-            onToggleDepartment={(value) => toggleImpactDepartment('whoPays', value)}
-            onToggleTeam={(value) => toggleImpactTeam('whoPays', value)}
-            onClearDepartments={() => clearImpactDepartments('whoPays')}
-            onClearTeams={() => clearImpactTeams('whoPays')}
-            onClearAll={() => clearImpactFilters('whoPays')}
-            onRemoveDepartment={(value) => removeImpactDepartment('whoPays', value)}
-            onRemoveTeam={(value) => removeImpactTeam('whoPays', value)}
-          />
-
-          <div className="mt-4 flex flex-wrap gap-2">
-            <div className="inline-flex items-center gap-2 rounded-full border border-[#dbeafe] bg-[#eff6ff] px-3 py-1.5 text-xs font-medium text-[#1d4ed8]">
-              <span className="h-2.5 w-2.5 rounded-full bg-[#2563eb]" />
-              <span>Business</span>
-            </div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-[#ccfbf1] bg-[#f0fdfa] px-3 py-1.5 text-xs font-medium text-[#0f766e]">
-              <span className="h-2.5 w-2.5 rounded-full bg-[#14b8a6]" />
-              <span>Delivery & engineering</span>
-            </div>
-          </div>
-
-          <div className="mt-6 h-[340px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={whoPaysComparison}
-                layout="vertical"
-                margin={{ top: 0, right: 12, left: 12, bottom: 0 }}
-                barCategoryGap={10}
-              >
-                <CartesianGrid stroke="#ececec" strokeDasharray="3 3" horizontal={false} />
-                <XAxis
-                  type="number"
-                  domain={[0, 100]}
-                  tickFormatter={(value) => `${value}%`}
-                  tick={{ fontSize: 12, fill: '#737373' }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  type="category"
-                  dataKey="label"
-                  width={170}
-                  tick={{ fontSize: 12, fill: '#525252' }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <Tooltip isAnimationActive={false} content={<ImpactComparisonTooltip />} />
-                <Bar dataKey="businessShare" name="Business" fill="#2563eb" radius={[0, 8, 8, 0]} />
-                <Bar
-                  dataKey="deliveryShare"
-                  name="Delivery & engineering"
-                  fill="#14b8a6"
-                  radius={[0, 8, 8, 0]}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </section>
-
-        <section className="mt-5 rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
-          <h3 className="text-lg font-semibold tracking-tight text-[#242424]">
-            Cost maturity
-          </h3>
-          <p className="mt-1 text-sm text-[#7a7a7a]">
-            This combines pricing understanding with day-to-day cost behavior, so we can see whether people just know pricing exists or actively optimize around it.
-          </p>
-
-          <DepartmentTeamFilters
-            respondentCount={filteredImpactResponses.costMaturity.length}
-            departmentOptions={impactDepartmentOptions}
-            teamOptions={impactTeamOptions}
-            selectedDepartments={impactDepartmentFilters.costMaturity}
-            selectedTeams={impactTeamFilters.costMaturity}
-            departmentAriaLabel="Filter cost maturity by departments"
-            teamAriaLabel="Filter cost maturity by teams"
-            onToggleDepartment={(value) => toggleImpactDepartment('costMaturity', value)}
-            onToggleTeam={(value) => toggleImpactTeam('costMaturity', value)}
-            onClearDepartments={() => clearImpactDepartments('costMaturity')}
-            onClearTeams={() => clearImpactTeams('costMaturity')}
-            onClearAll={() => clearImpactFilters('costMaturity')}
-            onRemoveDepartment={(value) => removeImpactDepartment('costMaturity', value)}
-            onRemoveTeam={(value) => removeImpactTeam('costMaturity', value)}
-          />
-
-          <div className="mt-4 flex flex-wrap gap-2">
-            {COST_MATURITY_SERIES.map((series) => (
-              <div
-                key={series.key}
-                className="inline-flex items-center gap-2 rounded-full border border-[#e5e7eb] bg-[#fafafa] px-3 py-1.5 text-xs font-medium text-[#374151]"
-              >
-                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: series.color }} />
-                <span>{series.label}</span>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-6 h-[260px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={costMaturityDistribution}
-                layout="vertical"
-                margin={{ top: 10, right: 12, left: 20, bottom: 0 }}
-              >
-                <CartesianGrid stroke="#ececec" vertical={false} strokeDasharray="3 3" />
-                <XAxis
-                  type="number"
-                  domain={[0, 100]}
-                  tickFormatter={(value) => `${value}%`}
-                  tick={{ fontSize: 12, fill: '#737373' }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  type="category"
-                  dataKey="cohort"
-                  width={150}
-                  tick={{ fontSize: 12, fill: '#525252' }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <Tooltip isAnimationActive={false} content={<CohortStackedTooltip />} />
-                {COST_MATURITY_SERIES.map((series, index) => (
-                  <Bar
-                    key={series.key}
-                    dataKey={series.key}
-                    name={series.label}
-                    stackId="cost-maturity"
-                    fill={series.color}
-                    radius={
-                      index === COST_MATURITY_SERIES.length - 1 ? [0, 8, 8, 0] : undefined
-                    }
-                  />
-                ))}
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </section>
-
-        <section className="mt-5 rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
-          <h3 className="text-lg font-semibold tracking-tight text-[#242424]">
-            Delivery-only planning impact
-          </h3>
-          <p className="mt-1 text-sm text-[#7a7a7a]">
-            This is very relevant for engineering/project delivery, but again it&apos;s cohort-specific.
-          </p>
-
-          <DepartmentTeamFilters
-            respondentCount={filteredDeliveryPlanningResponses.length}
-            departmentOptions={impactDepartmentOptions}
-            teamOptions={impactTeamOptions}
-            selectedDepartments={impactDepartmentFilters.planningImpact}
-            selectedTeams={impactTeamFilters.planningImpact}
-            departmentAriaLabel="Filter delivery planning impact by departments"
-            teamAriaLabel="Filter delivery planning impact by teams"
-            onToggleDepartment={(value) => toggleImpactDepartment('planningImpact', value)}
-            onToggleTeam={(value) => toggleImpactTeam('planningImpact', value)}
-            onClearDepartments={() => clearImpactDepartments('planningImpact')}
-            onClearTeams={() => clearImpactTeams('planningImpact')}
-            onClearAll={() => clearImpactFilters('planningImpact')}
-            onRemoveDepartment={(value) => removeImpactDepartment('planningImpact', value)}
-            onRemoveTeam={(value) => removeImpactTeam('planningImpact', value)}
-          />
-
-          <div className="mt-4 flex flex-wrap gap-2">
-            {PLANNING_IMPACT_SERIES.map((series) => (
-              <div
-                key={series.key}
-                className="inline-flex items-center gap-2 rounded-full border border-[#e5e7eb] bg-[#fafafa] px-3 py-1.5 text-xs font-medium text-[#374151]"
-              >
-                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: series.color }} />
-                <span>{series.label}</span>
-              </div>
-            ))}
-          </div>
-
-          {filteredDeliveryPlanningResponses.length > 0 ? (
-            <div className="mt-6 h-[220px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={deliveryPlanningImpactDistribution}
-                  layout="vertical"
-                  margin={{ top: 10, right: 12, left: 20, bottom: 0 }}
-                >
-                  <CartesianGrid stroke="#ececec" vertical={false} strokeDasharray="3 3" />
-                  <XAxis
-                    type="number"
-                    domain={[0, 100]}
-                    tickFormatter={(value) => `${value}%`}
-                    tick={{ fontSize: 12, fill: '#737373' }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <YAxis
-                    type="category"
-                    dataKey="cohort"
-                    width={170}
-                    tick={{ fontSize: 12, fill: '#525252' }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <Tooltip isAnimationActive={false} content={<CohortStackedTooltip />} />
-                  {PLANNING_IMPACT_SERIES.map((series, index) => (
-                    <Bar
-                      key={series.key}
-                      dataKey={series.key}
-                      name={series.label}
-                      stackId="planning-impact"
-                      fill={series.color}
-                      radius={
-                        index === PLANNING_IMPACT_SERIES.length - 1 ? [0, 8, 8, 0] : undefined
-                      }
-                    />
-                  ))}
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          ) : (
-            <div className="mt-6 flex h-[220px] items-center justify-center rounded-2xl border border-dashed border-[#d4d4d8] bg-[#fafafa] px-6 text-center text-sm text-[#7a7a7a]">
-              No delivery &amp; engineering respondents match the current department and team filter.
-            </div>
-          )}
-        </section>
-
-        <section className="mt-5 rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
-          <h3 className="text-lg font-semibold tracking-tight text-[#242424]">
-            Biggest non-AI blocker
-          </h3>
-          <p className="mt-1 text-sm text-[#7a7a7a]">
-            This explains what still limits AI value even when adoption and skills are already present.
-          </p>
-
-          <DepartmentTeamFilters
-            respondentCount={filteredImpactResponses.nonAiBlocker.length}
-            departmentOptions={impactDepartmentOptions}
-            teamOptions={impactTeamOptions}
-            selectedDepartments={impactDepartmentFilters.nonAiBlocker}
-            selectedTeams={impactTeamFilters.nonAiBlocker}
-            departmentAriaLabel="Filter biggest non-AI blocker by departments"
-            teamAriaLabel="Filter biggest non-AI blocker by teams"
-            onToggleDepartment={(value) => toggleImpactDepartment('nonAiBlocker', value)}
-            onToggleTeam={(value) => toggleImpactTeam('nonAiBlocker', value)}
-            onClearDepartments={() => clearImpactDepartments('nonAiBlocker')}
-            onClearTeams={() => clearImpactTeams('nonAiBlocker')}
-            onClearAll={() => clearImpactFilters('nonAiBlocker')}
-            onRemoveDepartment={(value) => removeImpactDepartment('nonAiBlocker', value)}
-            onRemoveTeam={(value) => removeImpactTeam('nonAiBlocker', value)}
-          />
-
-          <div className="mt-4 flex flex-wrap gap-2">
-            <div className="inline-flex items-center gap-2 rounded-full border border-[#dbeafe] bg-[#eff6ff] px-3 py-1.5 text-xs font-medium text-[#1d4ed8]">
-              <span className="h-2.5 w-2.5 rounded-full bg-[#2563eb]" />
-              <span>Business</span>
-            </div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-[#ccfbf1] bg-[#f0fdfa] px-3 py-1.5 text-xs font-medium text-[#0f766e]">
-              <span className="h-2.5 w-2.5 rounded-full bg-[#14b8a6]" />
-              <span>Delivery & engineering</span>
-            </div>
-          </div>
-
-          <div className="mt-6 h-[420px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={blockerComparison}
-                layout="vertical"
-                margin={{ top: 0, right: 12, left: 12, bottom: 0 }}
-                barCategoryGap={10}
-              >
-                <CartesianGrid stroke="#ececec" strokeDasharray="3 3" horizontal={false} />
-                <XAxis
-                  type="number"
-                  domain={[0, 100]}
-                  tickFormatter={(value) => `${value}%`}
-                  tick={{ fontSize: 12, fill: '#737373' }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  type="category"
-                  dataKey="label"
-                  width={290}
-                  tick={{ fontSize: 12, fill: '#525252' }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <Tooltip isAnimationActive={false} content={<ImpactComparisonTooltip />} />
-                <Bar dataKey="businessShare" name="Business" fill="#2563eb" radius={[0, 8, 8, 0]} />
-                <Bar
-                  dataKey="deliveryShare"
-                  name="Delivery & engineering"
-                  fill="#14b8a6"
-                  radius={[0, 8, 8, 0]}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </section>
-      </section>
-
-      <section id="org-dimension-culture" className="mt-8 scroll-mt-24">
-        <SectionHeader
-          title="Dimension 4: Culture"
-          subtitle="See whether AI practice is spreading, becoming team-owned, and turning into reusable habits instead of staying dependent on a few individual champions."
-        />
-
-        <ChampionVisibilityOptions topChampionRows={topChampionRows} />
-
-        {renderCultureStackedCard({
-          filterKey: 'growthMomentum',
-          title: 'AI growth momentum',
-          description:
-            'This is the best opener for Culture because it shows whether people feel stagnant, reactive, or actively growing.',
-          ariaLabelBase: 'AI growth momentum',
-          data: growthMomentumDistribution,
-          series: GROWTH_MOMENTUM_SERIES,
-          stackId: 'culture-growth-momentum',
-        })}
-
-        {renderCultureStackedCard({
-          filterKey: 'experimentationInitiative',
-          title: 'Experimentation initiative',
-          description:
-            'This tells you whether people are waiting for permission or self-starting with new tools and workflows.',
-          ariaLabelBase: 'experimentation initiative',
-          data: experimentationInitiativeDistribution,
-          series: EXPERIMENTATION_INITIATIVE_SERIES,
-          stackId: 'culture-experimentation-initiative',
-        })}
-
-        {renderCultureStackedCard({
-          filterKey: 'knowledgeSharing',
-          title: 'Knowledge sharing behavior',
-          description:
-            'This is the clearest “is AI practice social or still private?” chart.',
-          ariaLabelBase: 'knowledge sharing behavior',
-          data: knowledgeSharingDistribution,
-          series: KNOWLEDGE_SHARING_SERIES,
-          stackId: 'culture-knowledge-sharing',
-        })}
-
-        {renderCultureStackedCard({
-          filterKey: 'influenceScore',
-          title: 'Adoption influence on others',
-          description: 'This is your strongest champion-spread signal.',
-          ariaLabelBase: 'adoption influence on others',
-          data: influenceScoreDistribution,
-          series: INFLUENCE_SCORE_SERIES,
-          stackId: 'culture-influence-score',
-        })}
-
-        {renderCultureStackedCard({
-          filterKey: 'teamAiMaturity',
-          title: 'Team AI maturity around me',
-          description:
-            'This gives the local culture climate view: do people feel surrounded by strong AI practice or not.',
-          ariaLabelBase: 'team AI maturity around me',
-          data: teamAiMaturityDistribution,
-          series: TEAM_AI_MATURITY_SERIES,
-          stackId: 'culture-team-ai-maturity',
-        })}
-
-        {renderCultureStackedCard({
-          filterKey: 'organizationalSupport',
-          title: 'Organizational support for adoption',
-          description:
-            'This is the main culture-system chart: even if people want to adopt AI, do they feel backed by the org?',
-          ariaLabelBase: 'organizational support for adoption',
-          data: organizationalSupportDistribution,
-          series: ORGANIZATIONAL_SUPPORT_SERIES,
-          stackId: 'culture-organizational-support',
-        })}
-
-        {renderCultureStackedCard({
-          filterKey: 'toolSatisfaction',
-          title: 'Tool satisfaction',
-          description:
-            'Useful, but placed after support because it is more operational than cultural.',
-          ariaLabelBase: 'tool satisfaction',
-          data: toolSatisfactionDistribution,
-          series: TOOL_SATISFACTION_SERIES,
-          stackId: 'culture-tool-satisfaction',
-        })}
-
-        {renderCultureStackedCard({
-          filterKey: 'enjoyability',
-          title: 'Does AI make work more enjoyable?',
-          description:
-            'This is a strong secondary culture signal because enjoyment usually tracks whether adoption feels energizing or draining.',
-          ariaLabelBase: 'AI work enjoyability',
-          data: enjoyabilityDistribution,
-          series: ENJOYABILITY_SERIES,
-          stackId: 'culture-enjoyability',
-        })}
-
-        {renderCultureComparisonCard({
-          filterKey: 'supportNeeded',
-          title: 'Support needed right now',
-          description:
-            'This shows what kind of enablement people are actually asking for right now.',
-          ariaLabelBase: 'support needed right now',
-          data: cultureSupportNeededComparison,
-          chartHeight: 300,
-        })}
-
-        {renderCultureComparisonCard({
-          filterKey: 'handsOnHelp',
-          title: 'Hands-on help demand',
-          description:
-            'This is great for showing how much appetite there is for real enablement, not just passive resources.',
-          ariaLabelBase: 'hands-on help demand',
-          data: handsOnHelpComparison,
-          chartHeight: 280,
-        })}
-
-        {renderCultureStackedCard({
-          filterKey: 'practiceResilience',
-          title: 'Would practices survive if a key person left?',
-          description:
-            'This is one of the best Culture charts in the survey because it exposes dependency risk directly.',
-          ariaLabelBase: 'practice resilience if a key person left',
-          data: practiceResilienceDistribution,
-          series: PRACTICE_RESILIENCE_SERIES,
-          stackId: 'culture-practice-resilience',
-        })}
-
-        {renderCultureStackedCard({
-          filterKey: 'knowledgeArtifacts',
-          title: 'Knowledge artifacts created',
-          description:
-            'This shows whether AI knowledge is becoming reusable and durable.',
-          ariaLabelBase: 'knowledge artifacts created',
-          data: knowledgeArtifactDistribution,
-          series: KNOWLEDGE_ARTIFACT_SERIES,
-          stackId: 'culture-knowledge-artifacts',
-        })}
-
-        {renderCultureSingleCohortCard({
-          filterKey: 'deliveryAutomationSharing',
-          title: 'Delivery-only shared automation building',
-          description: 'Very valuable, but delivery-specific.',
-          ariaLabelBase: 'delivery shared automation building',
-          data: deliveryAutomationSharingDistribution,
-          series: DELIVERY_AUTOMATION_SHARING_SERIES,
-          stackId: 'culture-delivery-automation-sharing',
-          emptyState:
-            'No delivery & engineering respondents match the current department and team filter.',
-          respondentCount: filteredDeliveryAutomationSharingResponses.length,
-          filterRespondentCount: filteredDeliveryAutomationSharingResponses.length,
-          cohortColor: IMPACT_COHORT_COLORS.delivery,
-          cohortLabel: 'Delivery & engineering',
-        })}
-
-        {renderCultureSingleCohortCard({
-          filterKey: 'businessOnboarding',
-          title: 'Business-only onboarding on AI practices',
-          description:
-            'This is the cleanest signal of whether AI practice is actually institutionalized for non-engineering teams.',
-          ariaLabelBase: 'business onboarding on AI practices',
-          data: businessOnboardingDistribution,
-          series: BUSINESS_ONBOARDING_SERIES,
-          stackId: 'culture-business-onboarding',
-          emptyState:
-            'No business respondents match the current department and team filter.',
-          respondentCount: filteredBusinessOnboardingResponses.length,
-          filterRespondentCount: filteredBusinessOnboardingResponses.length,
-          cohortColor: IMPACT_COHORT_COLORS.business,
-          cohortLabel: 'Business',
-        })}
-      </section>
-
-      <section id="org-dimension-vision" className="mt-8 scroll-mt-24">
-        <SectionHeader
-          title="Dimension 5: Vision"
-          subtitle="See how clearly people can spot future AI value, choose the right opportunities, connect them to business outcomes, and define what should happen next."
-        />
-
-        {renderVisionStackedCard({
-          filterKey: 'opportunityClarity',
-          title: 'Opportunity clarity',
-          description:
-            'This should open the section because it answers the core question: do people clearly see where more AI value could come from in the next 6 months?',
-          ariaLabelBase: 'opportunity clarity',
-          data: opportunityClarityDistribution,
-          series: OPPORTUNITY_CLARITY_SERIES,
-          stackId: 'vision-opportunity-clarity',
-        })}
-
-        {renderVisionComparisonCard({
-          filterKey: 'actionPriorities',
-          title: 'Next-quarter action priorities',
-          description:
-            'This is probably the most practical chart in the whole section because it turns Vision into specific near-term interventions.',
-          ariaLabelBase: 'next-quarter action priorities',
-          data: visionActionPrioritiesComparison,
-          chartHeight: 560,
-          labelWidth: 340,
-        })}
-
-        {renderVisionStackedCard({
-          filterKey: 'workChangeImagination',
-          title: 'How people imagine work changing',
-          description:
-            'This shows whether people still think in “AI speeds up tasks” mode or whether they can imagine genuinely different workflows.',
-          ariaLabelBase: 'how people imagine work changing',
-          data: workChangeImaginationDistribution,
-          series: WORK_CHANGE_IMAGINATION_SERIES,
-          stackId: 'vision-work-change-imagination',
-        })}
-
-        {renderVisionStackedCard({
-          filterKey: 'opportunitySelectionMaturity',
-          title: 'Opportunity selection maturity',
-          description:
-            'This shows whether people choose AI opportunities based on hype, personal curiosity, or real value and feasibility thinking.',
-          ariaLabelBase: 'opportunity selection maturity',
-          data: opportunitySelectionDistribution,
-          series: OPPORTUNITY_SELECTION_SERIES,
-          stackId: 'vision-opportunity-selection',
-          chartHeight: 280,
-        })}
-
-        {renderVisionStackedCard({
-          filterKey: 'businessValueConnection',
-          title: 'Ability to connect AI to business value',
-          description:
-            'This is one of the strongest leadership-facing Vision charts because it shows whether AI is framed as personal productivity or as business, project, client, or team value.',
-          ariaLabelBase: 'ability to connect AI to business value',
-          data: businessValueConnectionDistribution,
-          series: BUSINESS_VALUE_CONNECTION_SERIES,
-          stackId: 'vision-business-value-connection',
-          chartHeight: 280,
-        })}
-
-        {renderVisionStackedCard({
-          filterKey: 'personalDevelopmentDirection',
-          title: 'Personal development direction',
-          description:
-            'This shows whether people know what capability they want to build next, which is a strong forward-readiness signal.',
-          ariaLabelBase: 'personal development direction',
-          data: personalDevelopmentDirectionDistribution,
-          series: PERSONAL_DEVELOPMENT_DIRECTION_SERIES,
-          stackId: 'vision-personal-development-direction',
-          chartHeight: 280,
-        })}
-
-        <section className="mt-5 rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
-          <h3 className="text-lg font-semibold tracking-tight text-[#242424]">
-            Vision readiness score
-          </h3>
-          <p className="mt-1 text-sm text-[#7a7a7a]">
-            This gives one synthesized view of whether people can spot opportunities, evaluate them, connect them to value, and act intentionally.
-          </p>
-
-          <DepartmentTeamFilters
-            respondentCount={filteredVisionResponses.visionReadiness.length}
-            departmentOptions={impactDepartmentOptions}
-            teamOptions={impactTeamOptions}
-            selectedDepartments={visionDepartmentFilters.visionReadiness}
-            selectedTeams={visionTeamFilters.visionReadiness}
-            departmentAriaLabel="Filter vision readiness score by departments"
-            teamAriaLabel="Filter vision readiness score by teams"
-            onToggleDepartment={(value) => toggleVisionDepartment('visionReadiness', value)}
-            onToggleTeam={(value) => toggleVisionTeam('visionReadiness', value)}
-            onClearDepartments={() => clearVisionDepartments('visionReadiness')}
-            onClearTeams={() => clearVisionTeams('visionReadiness')}
-            onClearAll={() => clearVisionFilters('visionReadiness')}
-            onRemoveDepartment={(value) => removeVisionDepartment('visionReadiness', value)}
-            onRemoveTeam={(value) => removeVisionTeam('visionReadiness', value)}
-          />
-
-          <div className="mt-4 flex flex-wrap items-center gap-2 rounded-2xl border border-[#e5e7eb] bg-[#fcfcfc] px-4 py-3 text-sm text-[#525252]">
-            <span className="font-medium text-[#242424]">Average readiness score:</span>
-            {visionReadinessAverageSummary.map((entry) => (
-              <span
-                key={`vision-readiness-average-${entry.cohort}`}
-                className="inline-flex items-center gap-2 rounded-full border border-[#e5e7eb] bg-white px-3 py-1.5"
-              >
-                <span
-                  className="h-2.5 w-2.5 rounded-full"
-                  style={{ backgroundColor: entry.color }}
-                />
-                <span className="font-medium text-[#242424]">{entry.cohort}</span>
-                <span>
-                  {entry.averageScore !== null ? `${entry.averageScore.toFixed(1)} / 5` : '—'}
-                </span>
-              </span>
-            ))}
-          </div>
-
-          {renderCultureLegendBadges(VISION_READINESS_SERIES)}
-
-          <div className="mt-6 h-[260px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={visionReadinessDistribution}
-                layout="vertical"
-                margin={{ top: 10, right: 12, left: 20, bottom: 0 }}
-              >
-                <CartesianGrid stroke="#ececec" vertical={false} strokeDasharray="3 3" />
-                <XAxis
-                  type="number"
-                  domain={[0, 100]}
-                  tickFormatter={(value) => `${value}%`}
-                  tick={{ fontSize: 12, fill: '#737373' }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  type="category"
-                  dataKey="cohort"
-                  width={150}
-                  tick={{ fontSize: 12, fill: '#525252' }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <Tooltip isAnimationActive={false} content={<CohortStackedTooltip />} />
-                {VISION_READINESS_SERIES.map((entry, index) => (
-                  <Bar
-                    key={entry.key}
-                    dataKey={entry.key}
-                    name={entry.label}
-                    stackId="vision-readiness"
-                    fill={entry.color}
-                    radius={index === VISION_READINESS_SERIES.length - 1 ? [0, 8, 8, 0] : undefined}
-                  />
-                ))}
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </section>
-
-        {renderVisionComparisonCard({
-          filterKey: 'visionActionMix',
-          title: 'Vision action mix',
-          description:
-            'This is a more executive-friendly version of the action-priority view, showing whether the organization’s next-step thinking is concentrated on workflow change, enablement, governance, or broader strategy.',
-          ariaLabelBase: 'vision action mix',
-          data: visionActionMixComparison,
-          chartHeight: 260,
-          labelWidth: 170,
-        })}
-      </section>
+      <OrganizationDimensionVisionSection {...visionSectionProps} />
 
       <section id="org-where-gaps" className="mt-8 scroll-mt-24">
         <SectionHeader

@@ -12,6 +12,8 @@ export type ChampionRow = {
   teams: string[];
 };
 
+export const AI_CHAMPION_SCORE_THRESHOLD = 3.6;
+
 function splitNameParts(name: string): { firstName: string; remainder: string } {
   const trimmedName = name.trim();
   const firstSpaceIndex = trimmedName.indexOf(' ');
@@ -111,7 +113,7 @@ function championTags(person: Individual): string[] {
   return Array.from(new Set([...selected, ...fallbackDimensions])).slice(0, 3);
 }
 
-export function buildTopChampionRows(individuals: Individual[]): ChampionRow[] {
+export function buildChampionRows(individuals: Individual[]): ChampionRow[] {
   return [...individuals]
     .map((person) => {
       const teams = championTeams(person);
@@ -135,28 +137,50 @@ export function buildTopChampionRows(individuals: Individual[]): ChampionRow[] {
         return right.person.scores.Impact - left.person.scores.Impact;
       }
       return left.person.name.localeCompare(right.person.name);
-    })
-    .slice(0, 10);
+    });
+}
+
+export function buildTopChampionRows(individuals: Individual[]): ChampionRow[] {
+  return buildChampionRows(individuals).slice(0, 10);
 }
 
 export default function ChampionVisibilityOptions({
   topChampionRows,
+  showHeader = true,
+  wrapInCard = true,
+  emptyStateMessage = 'Champion views will appear here once people survey results are available.',
 }: {
   topChampionRows: ChampionRow[];
+  showHeader?: boolean;
+  wrapInCard?: boolean;
+  emptyStateMessage?: string;
 }) {
   const { isSensitiveDataHidden } = useSensitiveData();
+  const containerClassName = wrapInCard
+    ? 'mt-5 rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm'
+    : 'mt-5';
+  const tableWrapperClassName = wrapInCard
+    ? `${showHeader ? 'mt-4 ' : ''}overflow-x-auto rounded-2xl border border-[#ececec] bg-white`
+    : 'overflow-x-auto rounded-2xl border border-[#eaeaea] bg-white shadow-sm';
+  const emptyStateClassName = wrapInCard
+    ? 'mt-5 rounded-2xl border border-dashed border-[#d4d4d8] bg-[#fafafa] px-6 py-8 text-center text-sm text-[#7a7a7a]'
+    : 'rounded-2xl border border-dashed border-[#d4d4d8] bg-[#fafafa] px-6 py-8 text-center text-sm text-[#7a7a7a]';
 
   return (
-    <section className="mt-5 rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
-      <h3 className="text-lg font-semibold tracking-tight text-[#242424]">
-        Top AI champions
-      </h3>
-      <p className="mt-1 max-w-3xl text-sm text-[#7a7a7a]">
-        People to learn from, involve, and support based on overall maturity, culture spread, and real impact.
-      </p>
+    <section className={containerClassName}>
+      {showHeader ? (
+        <>
+          <h3 className="text-lg font-semibold tracking-tight text-[#242424]">
+            Top AI champions
+          </h3>
+          <p className="mt-1 max-w-3xl text-sm text-[#7a7a7a]">
+            People to learn from, involve, and support based on overall maturity, culture spread, and real impact.
+          </p>
+        </>
+      ) : null}
 
       {topChampionRows.length > 0 ? (
-        <div className="mt-4 overflow-x-auto rounded-2xl border border-[#ececec] bg-white">
+        <div className={tableWrapperClassName}>
           <table className="min-w-full divide-y divide-[#ececec] text-sm">
             <thead className="bg-[#fafafa]">
               <tr>
@@ -233,8 +257,8 @@ export default function ChampionVisibilityOptions({
           </table>
         </div>
       ) : (
-        <div className="mt-5 rounded-2xl border border-dashed border-[#d4d4d8] bg-[#fafafa] px-6 py-8 text-center text-sm text-[#7a7a7a]">
-          Champion views will appear here once people survey results are available.
+        <div className={emptyStateClassName}>
+          {emptyStateMessage}
         </div>
       )}
     </section>
