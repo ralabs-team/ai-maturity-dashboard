@@ -2,7 +2,7 @@
 
 Survey-based dashboard for measuring AI maturity across teams and organizations.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fralabs-team%2Fai-maturity-dashboard&project-name=ai-maturity-dashboard)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fralabs-team%2Fai-maturity-dashboard&project-name=ai-maturity-dashboard&repository-name=ai-maturity-dashboard)
 
 It helps turn survey responses into simple views of:
 
