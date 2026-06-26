@@ -1,4 +1,6 @@
 import { BarChart, Bar, ResponsiveContainer, CartesianGrid, XAxis, YAxis, Tooltip } from '../recharts';
+import ChartFeedback from '../../analytics/ChartFeedback';
+import { SensitiveAxisTick, SensitiveTooltipLabel } from '../../ui/SensitiveChartText';
 
 type Row = {
   name: string;
@@ -20,9 +22,11 @@ function SkillsGapTooltip({
 
   return (
     <div className="rounded-md bg-[#242424] px-4 py-3 text-sm text-white shadow-lg">
-      <div className="mb-2 font-semibold text-white">
-        Department: {label ?? point.name}
-      </div>
+      <SensitiveTooltipLabel
+        prefix="Department"
+        value={String(label ?? point.name)}
+        className="mb-2 font-semibold text-white"
+      />
       <div className="space-y-1">
         <div>Self-rated skills: {point.self.toFixed(1)} / 5</div>
         <div>Respondents: {point.respondents}</div>
@@ -39,7 +43,8 @@ export default function SkillsConfidenceGapCard({
   const rows = departmentRows;
 
   return (
-    <section className="rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
+    <section className="group relative rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
+      <ChartFeedback chartTitle="Skills confidence vs verification gap" page="organization" />
       <h3 className="text-lg font-semibold tracking-tight text-[#242424]">
         Skills confidence vs verification gap
       </h3>
@@ -58,7 +63,15 @@ export default function SkillsConfidenceGapCard({
                 angle={-45}
                 textAnchor="end"
                 height={92}
-                tick={{ fontSize: 12, fill: '#737373' }}
+                tick={
+                  <SensitiveAxisTick
+                    fill="#737373"
+                    fontSize={12}
+                    textAnchor="end"
+                    angle={-45}
+                    dy={6}
+                  />
+                }
                 axisLine={false}
                 tickLine={false}
               />

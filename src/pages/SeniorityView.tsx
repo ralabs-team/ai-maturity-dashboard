@@ -1,10 +1,12 @@
-import { useMemo, useState, type KeyboardEvent } from 'react';
-import { ArrowDown, ArrowUp, ArrowUpDown, Check, Pencil, X } from 'lucide-react';
+import { useEffect, useMemo, useState, type KeyboardEvent } from 'react';
+import { ArrowDown, ArrowUp, ArrowUpDown, Check, Loader2, Pencil, X } from 'lucide-react';
 import PageHeader from '../components/layout/PageHeader';
 import { useSensitiveData } from '../components/privacy/SensitiveDataContext';
 import PersonAvatar from '../components/ui/PersonAvatar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip';
 import { useSurveyData } from '../data/survey/SurveyDataContext';
+import { trackEvent } from '../lib/amplitude';
+import { useTableSortPending } from '../hooks/useTableSortPending';
 
 interface SeniorityRow {
   name: string;
@@ -31,6 +33,13 @@ export default function SeniorityView() {
   const [validationMessage, setValidationMessage] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('name');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  const { isTableSortPending, queueTableSort, clearTableSortPending } = useTableSortPending();
+
+  useEffect(() => {
+    if (isTableSortPending) {
+      clearTableSortPending();
+    }
+  }, [clearTableSortPending, isTableSortPending, sortDirection, sortKey]);
 
   const seniorityRows = useMemo<SeniorityRow[]>(() => {
     const seniorityMembers = new Map<
@@ -100,13 +109,15 @@ export default function SeniorityView() {
   }, [rawResponses, resolvePersonName, sortDirection, sortKey]);
 
   const toggleSort = (nextSortKey: SortKey) => {
-    if (sortKey === nextSortKey) {
-      setSortDirection((currentDirection) => (currentDirection === 'asc' ? 'desc' : 'asc'));
-      return;
-    }
+    queueTableSort(() => {
+      if (sortKey === nextSortKey) {
+        setSortDirection((currentDirection) => (currentDirection === 'asc' ? 'desc' : 'asc'));
+        return;
+      }
 
-    setSortKey(nextSortKey);
-    setSortDirection('asc');
+      setSortKey(nextSortKey);
+      setSortDirection('asc');
+    });
   };
 
   const resetEditingState = () => {
@@ -138,7 +149,15 @@ export default function SeniorityView() {
       return;
     }
 
+    const editedSeniority = seniorityRows.find((seniority) => seniority.name === editingSeniorityName);
+
     renameSeniority(editingSeniorityName, sanitizedDraftSeniorityName);
+    trackEvent('seniority_seniority_renamed', {
+      page: 'seniority',
+      people_assigned_count: editedSeniority?.peopleAssigned,
+      previous_name_length: editingSeniorityName.length,
+      next_name_length: sanitizedDraftSeniorityName.length,
+    });
     resetEditingState();
   };
 
@@ -176,7 +195,9 @@ export default function SeniorityView() {
                   className="inline-flex items-center gap-1 transition-colors hover:text-[#111827]"
                 >
                   People Assigned
-                  {sortKey === 'peopleAssigned' ? (
+                  {isTableSortPending && sortKey === 'peopleAssigned' ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : sortKey === 'peopleAssigned' ? (
                     sortDirection === 'asc' ? (
                       <ArrowUp className="h-3.5 w-3.5" />
                     ) : (

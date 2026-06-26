@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDown, X } from 'lucide-react';
+import { ArrowDown, CircleHelp, Loader2, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import AskAiSidebar, { AskAiTriggerButton } from '../components/ai/AskAiSidebar';
 import {
+
   Bar,
   BarChart,
   CartesianGrid,
@@ -19,6 +21,8 @@ import {
   XAxis,
   YAxis,
 } from '../components/charts/recharts';
+import ChartFeedback from '../components/analytics/ChartFeedback';
+import SuggestedGoalCard from '../components/goals/SuggestedGoalCard';
 import PageHeader from '../components/layout/PageHeader';
 import FloatingSectionNav from '../components/layout/FloatingSectionNav';
 import { useNavigationPending } from '../components/layout/NavigationPendingContext';
@@ -36,19 +40,45 @@ import WorkflowTransformationGapCard from '../components/charts/organization/Wor
 import VisionToActionGapCard from '../components/charts/organization/VisionToActionGapCard';
 import CultureSpreadGapCard from '../components/charts/organization/CultureSpreadGapCard';
 import RiskGovernanceHotspotsCard from '../components/charts/organization/RiskGovernanceHotspotsCard';
+import MaturityVisibilityGapCard from '../components/charts/organization/MaturityVisibilityGapCard';
+import ResistanceByScopeCard, {
+  buildResistanceByScopeRows,
+} from '../components/charts/organization/ResistanceByScopeCard';
+import ResistanceReasonsCard, {
+  buildResistanceSummary,
+  RESISTANCE_SCORE_HELP_TEXT,
+} from '../components/charts/organization/ResistanceReasonsCard';
 import {
   AI_CHAMPION_SCORE_THRESHOLD,
   buildChampionRows,
   buildTopChampionRows,
 } from '../components/organization/ChampionVisibilityOptions';
+import { buildExperienceReviewCohorts } from '../components/organization/ExperienceReviewOptions';
 import CompactUsageMultiSelect from '../components/organization/CompactUsageMultiSelect';
 import OrganizationDimensionCultureSection from '../components/organization/OrganizationDimensionCultureSection';
 import OrganizationDimensionImpactSection from '../components/organization/OrganizationDimensionImpactSection';
+import TopDeviatingPeopleCard from '../components/organization/TopDeviatingPeopleCard';
 import OrganizationDimensionVisionSection from '../components/organization/OrganizationDimensionVisionSection';
 import SectionHeader from '../components/organization/OrganizationSectionHeader';
+import ProjectArchetypeBubbleChart, {
+  type ArchetypeBubbleRow,
+} from '../components/charts/organization/ProjectArchetypeBubbleChart';
 import { Tooltip as InfoTooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip';
+import { buildDeviatingPeopleRows } from '../data/survey/deviationInsights';
+import { buildTeamSuggestedGoals } from '../data/survey/goals';
+import {
+  resolveIndividualArchetype,
+  type IndividualArchetypeProfile,
+} from '../data/survey/individualArchetypes';
+import {
+  resolveTeamArchetype,
+  type TeamArchetypeProfile,
+} from '../data/survey/teamArchetypes';
 import { useSurveyData } from '../data/survey/SurveyDataContext';
 import type { SupportDemandSeriesKey } from '../data/survey/supportDemand';
+import { buildTeamValidatedScopeRows } from '../data/survey/teamValidatedView';
+import { useTableSortPending } from '../hooks/useTableSortPending';
+import type { AskAiResearchPack } from '../shared/api/askAi';
 import {
   allDepartmentsList,
   allProjectsList,
@@ -68,8 +98,9 @@ type HeatmapRow = Record<OrgDimension, number> & {
   respondents: number;
   overall: number;
   level: string;
+  archetype: TeamArchetypeProfile;
 };
-type HeatmapSortKey = 'department' | 'overall' | 'level' | 'respondents' | OrgDimension;
+type HeatmapSortKey = 'department' | 'overall' | 'level' | 'archetype' | 'respondents' | OrgDimension;
 type HeatmapSortDirection = 'asc' | 'desc';
 type ProjectRankingRow = {
   id: string;
@@ -77,18 +108,20 @@ type ProjectRankingRow = {
   respondents: number;
   overall: number;
   level: string;
+  archetype: TeamArchetypeProfile;
   dimensions: Record<OrgDimension, number>;
 };
-type ProjectRankingSortKey = 'name' | 'overall' | 'level' | 'respondents' | OrgDimension;
+type ProjectRankingSortKey = 'name' | 'overall' | 'level' | 'archetype' | 'respondents' | OrgDimension;
 type ProjectRankingSortDirection = 'asc' | 'desc';
 type UsageFrequencyRow = {
   label: string;
   count: number;
 };
-type OrganizationAiResearchPack = {
-  filename: string;
-  markdown: string;
+type MentionCloudEntry = {
+  label: string;
+  count: number;
 };
+type OrganizationAiResearchPack = AskAiResearchPack;
 type UsageCategoryRow = {
   label: string;
   count: number;
@@ -191,7 +224,6 @@ type CultureFilterKey =
   | 'influenceScore'
   | 'supportNeeded'
   | 'handsOnHelp'
-  | 'deliveryAutomationSharing'
   | 'businessOnboarding';
 type GrowthMomentumKey =
   | 'notDeveloping'
@@ -253,10 +285,6 @@ type InfluenceScoreKey =
   | 'oneAdoptionExample'
   | 'teamLevelInfluence'
   | 'crossTeamInfluence';
-type DeliveryAutomationSharingKey =
-  | 'noSharedBuild'
-  | 'personalOnlySetup'
-  | 'fewPeopleTried';
 type BusinessOnboardingKey =
   | 'noOnboarding'
   | 'informalOnboarding'
@@ -386,10 +414,6 @@ type InfluenceScoreDistributionRow = {
   cohort: string;
   respondents: number;
 } & Record<InfluenceScoreKey, number>;
-type DeliveryAutomationSharingDistributionRow = {
-  cohort: string;
-  respondents: number;
-} & Record<DeliveryAutomationSharingKey, number>;
 type BusinessOnboardingDistributionRow = {
   cohort: string;
   respondents: number;
@@ -451,6 +475,7 @@ type SummaryCard = {
   accent?: boolean;
   delta?: string;
   deltaDetail?: string;
+  helpText?: string;
   hoverValue?: string;
   onClick?: () => void;
 };
@@ -544,6 +569,17 @@ const ORG_QUADRANT_COLORS = {
   lowHigh: '#7c3aed',
   lowLow: '#94a3b8',
 } as const;
+
+const INDIVIDUAL_ARCHETYPE_BUBBLE_COLORS: Record<string, string> = {
+  earlyExplorer: '#94a3b8',
+  visioneer: '#2563eb',
+  individualExpert: '#d97706',
+  toolOperator: '#0891b2',
+  skepticalPerformer: '#7c3aed',
+  outcomeHunter: '#dc2626',
+  habitBuilder: '#059669',
+  aiNative: '#4338ca',
+};
 
 const DELIVERY_USAGE_ACTIVITY_OPTIONS = [
   'Writing / editing / communication',
@@ -818,7 +854,6 @@ const CULTURE_FILTER_KEYS: CultureFilterKey[] = [
   'influenceScore',
   'supportNeeded',
   'handsOnHelp',
-  'deliveryAutomationSharing',
   'businessOnboarding',
 ];
 const GROWTH_MOMENTUM_SERIES = [
@@ -912,15 +947,6 @@ const INFLUENCE_SCORE_SERIES = [
   { key: 'crossTeamInfluence', label: 'Cross-team influence', color: '#0f766e' },
 ] as const satisfies ReadonlyArray<{
   key: InfluenceScoreKey;
-  label: string;
-  color: string;
-}>;
-const DELIVERY_AUTOMATION_SHARING_SERIES = [
-  { key: 'noSharedBuild', label: 'No shared build', color: '#d4d4d8' },
-  { key: 'personalOnlySetup', label: 'Personal-only setup', color: '#93c5fd' },
-  { key: 'fewPeopleTried', label: 'A few people tried it', color: '#0f766e' },
-] as const satisfies ReadonlyArray<{
-  key: DeliveryAutomationSharingKey;
   label: string;
   color: string;
 }>;
@@ -1165,7 +1191,7 @@ const HANDS_ON_HELP_LABELS = [
   '1:1 pairing',
 ] as const;
 
-const ORGANIZATION_SECTION_LINKS = [
+const ORGANIZATION_DEEP_DIVE_SECTION_LINKS = [
   { id: 'org-top-summary', label: 'Top summary' },
   {
     id: 'org-where-now',
@@ -1181,9 +1207,701 @@ const ORGANIZATION_SECTION_LINKS = [
   { id: 'org-where-gaps', label: 'Where are the gaps?' },
   { id: 'org-where-invest', label: 'Where should we invest?' },
 ] as const;
+const ORGANIZATION_MUST_KNOW_SECTION_LINKS = [
+  { id: 'org-top-summary', label: 'Top summary' },
+  { id: 'org-where-now', label: 'Where are we now?' },
+  { id: 'org-where-gaps', label: 'Usage vs Impact' },
+  { id: 'org-top-deviating', label: 'Top deviating people' },
+  { id: 'org-where-invest', label: 'Suggested goals' },
+] as const;
 const ALL_DEPARTMENTS = 'All departments';
 const ALL_SENIORITIES = 'All seniorities';
 const ALL_TEAMS = 'All teams';
+const TOOL_MENTION_PHRASES = [
+  'Claude Code',
+  'Claude (web)',
+  'ChatGPT (web)',
+  'GitHub Copilot',
+  'VS Code with AI extension',
+  "I didn't use any AI tool last month",
+  'Other (free text)',
+  'Antigravity',
+  'Perplexity',
+  'Windsurf',
+  'Cursor',
+  'Gemini',
+  'Codex',
+  'Cline',
+] as const;
+const MODEL_MENTION_PHRASES = [
+  'I don’t track specific model names',
+  "I don't track specific model names",
+  'GPT-5.4 mini / nano, or GPT-5.5 mini / nano',
+  'Claude Sonnet 4.5 / 4.6',
+  'Gemini 2.5 Pro / Flash',
+  'Gemini 3 Pro / Flash',
+  'GPT-5.4 / GPT-5.5',
+  'Self-hosted (e.g. Llama 4, DeepSeek)',
+  'ChatGPT Images 2.0',
+  'Claude Opus 4.6',
+  'Claude Opus 4.7',
+  'Claude Haiku',
+  'GPT-4.1',
+  'GPT-4o',
+  'o3 / o4-mini',
+  'no usage',
+] as const;
+const LITERAL_BLOCKER_STOP_WORDS = new Set([
+  'a',
+  'about',
+  'actually',
+  'adds',
+  'all',
+  'also',
+  'am',
+  'an',
+  'and',
+  'any',
+  'are',
+  'as',
+  'at',
+  'be',
+  'because',
+  'been',
+  'being',
+  'but',
+  'by',
+  'can',
+  'cant',
+  "can't",
+  'could',
+  'did',
+  'didnt',
+  "didn't",
+  'do',
+  'does',
+  'doing',
+  'dont',
+  "don't",
+  'for',
+  'from',
+  'get',
+  'got',
+  'had',
+  'has',
+  'have',
+  'having',
+  'how',
+  'i',
+  'if',
+  'im',
+  "i'm",
+  'in',
+  'instead',
+  'into',
+  'is',
+  'it',
+  "it's",
+  'its',
+  'just',
+  'know',
+  'lack',
+  'like',
+  'lot',
+  'lots',
+  'main',
+  'mainly',
+  'make',
+  'makes',
+  'me',
+  'more',
+  'most',
+  'mostly',
+  'much',
+  'my',
+  'need',
+  'needs',
+  'no',
+  'not',
+  'nothing',
+  'of',
+  'often',
+  'on',
+  'one',
+  'only',
+  'or',
+  'our',
+  'out',
+  'point',
+  'really',
+  'right',
+  'same',
+  'so',
+  'some',
+  'something',
+  'specific',
+  'still',
+  'such',
+  'than',
+  'that',
+  "that's",
+  'the',
+  'their',
+  'them',
+  'then',
+  'there',
+  'these',
+  'they',
+  'thing',
+  'things',
+  'think',
+  'this',
+  'to',
+  'too',
+  'understand',
+  'use',
+  'used',
+  'using',
+  'value',
+  'very',
+  'want',
+  'was',
+  'way',
+  'we',
+  'well',
+  'were',
+  'when',
+  'whenever',
+  'where',
+  'which',
+  'while',
+  'who',
+  'why',
+  'will',
+  'with',
+  'work',
+  'would',
+  'you',
+  'your',
+  'always',
+]);
+const MENTION_STOP_WORDS = new Set([
+  'a',
+  'an',
+  'and',
+  'any',
+  'app',
+  'apps',
+  'are',
+  'as',
+  'at',
+  'be',
+  'been',
+  'being',
+  'but',
+  'by',
+  'do',
+  'does',
+  'dont',
+  "don't",
+  'for',
+  'from',
+  'had',
+  'has',
+  'have',
+  'i',
+  'im',
+  "i'm",
+  'in',
+  'into',
+  'is',
+  'it',
+  'just',
+  'last',
+  'like',
+  'lot',
+  'lots',
+  'make',
+  'model',
+  'models',
+  'month',
+  'more',
+  'mostly',
+  'most',
+  'my',
+  'names',
+  'not',
+  'of',
+  'on',
+  'one',
+  'or',
+  'other',
+  'our',
+  'out',
+  'over',
+  'plus',
+  'primary',
+  'really',
+  'specific',
+  'stuff',
+  'that',
+  'the',
+  'their',
+  'them',
+  'then',
+  'there',
+  'these',
+  'thing',
+  'things',
+  'to',
+  'tool',
+  'tools',
+  'track',
+  'tracking',
+  'use',
+  'used',
+  'user',
+  'using',
+  'very',
+  'via',
+  'was',
+  'web',
+  'were',
+  'with',
+  'work',
+]);
+const MENTION_DISPLAY_MAP = new Map<string, string>([
+  ['ai', 'AI'],
+  ['claude', 'Claude'],
+  ['chatgpt', 'ChatGPT'],
+  ['codex', 'Codex'],
+  ['copilot', 'Copilot'],
+  ['cursor', 'Cursor'],
+  ['deepseek', 'DeepSeek'],
+  ['figma', 'Figma'],
+  ['firefly', 'Firefly'],
+  ['gemini', 'Gemini'],
+  ['github', 'GitHub'],
+  ['gitlab', 'GitLab'],
+  ['glm', 'GLM'],
+  ['google', 'Google'],
+  ['junie', 'Junie'],
+  ['kimi', 'Kimi'],
+  ['llama', 'Llama'],
+  ['midjourney', 'Midjourney'],
+  ['nanobanana', 'NanoBanana'],
+  ['opencode', 'OpenCode'],
+  ['openai', 'OpenAI'],
+  ['opus', 'Opus'],
+  ['perplexity', 'Perplexity'],
+  ['playwright', 'Playwright'],
+  ['pro', 'Pro'],
+  ['qwen', 'Qwen'],
+  ['rovo', 'Rovo'],
+  ['sonnet', 'Sonnet'],
+  ['stitch', 'Stitch'],
+]);
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function normalizeMentionSource(rawValue: string): string {
+  return rawValue
+    .toLowerCase()
+    .replace(/[\u2018\u2019\u201A\u201B]/g, "'")
+    .replace(/[\u201C\u201D\u201E\u201F]/g, '"')
+    .replace(/[\u2013\u2014\u2212]/g, '-')
+    .replace(/[()[\]{}]/g, ' ')
+    .replace(/[,;:/\\|]+/g, ' ')
+    .replace(/[!?]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function buildMentionPhraseMatchers(phrases: readonly string[]) {
+  return [...phrases]
+    .map((label) => ({
+      label,
+      key: normalizeMentionSource(label),
+    }))
+    .sort((left, right) => right.key.length - left.key.length);
+}
+
+const TOOL_MENTION_MATCHERS = buildMentionPhraseMatchers(TOOL_MENTION_PHRASES);
+const MODEL_MENTION_MATCHERS = buildMentionPhraseMatchers(MODEL_MENTION_PHRASES);
+
+function formatMentionToken(token: string): string {
+  const mapped = MENTION_DISPLAY_MAP.get(token);
+
+  if (mapped) {
+    return mapped;
+  }
+
+  if (/^(gpt|o\d|r\d|v\d)/.test(token)) {
+    return token.toUpperCase();
+  }
+
+  if (token.includes('-') || token.includes('.')) {
+    return token
+      .split(/([-.])/)
+      .map((part) => {
+        if (part === '-' || part === '.') {
+          return part;
+        }
+
+        const mappedPart = MENTION_DISPLAY_MAP.get(part);
+        if (mappedPart) {
+          return mappedPart;
+        }
+
+        if (/^\d+[a-z]*$/i.test(part)) {
+          return part.toUpperCase();
+        }
+
+        return part.charAt(0).toUpperCase() + part.slice(1);
+      })
+      .join('');
+  }
+
+  return token.charAt(0).toUpperCase() + token.slice(1);
+}
+
+function isStandaloneVersionToken(token: string): boolean {
+  return /^\d+(?:\.\d+)+$/.test(token);
+}
+
+function normalizeLiteralWordSource(rawValue: string): string {
+  return rawValue
+    .toLowerCase()
+    .replace(/[\u2018\u2019\u201A\u201B]/g, "'")
+    .replace(/[\u201C\u201D\u201E\u201F]/g, '"')
+    .replace(/[\u2013\u2014\u2212]/g, '-')
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/[()[\]{}]/g, ' ')
+    .replace(/[.,;:/\\|!?]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function formatLiteralWordToken(token: string): string {
+  if (token === 'ai') {
+    return 'AI';
+  }
+
+  if (token === 'llm') {
+    return 'LLM';
+  }
+
+  if (token === 'mcp') {
+    return 'MCP';
+  }
+
+  return token;
+}
+
+function extractMentionLabels(
+  rawValue: string | undefined,
+  matchers: Array<{ label: string; key: string }>,
+): string[] {
+  const selections = splitSurveyMultiValue(rawValue);
+  const mentions = new Set<string>();
+
+  for (const selection of selections) {
+    let working = ` ${normalizeMentionSource(selection)} `;
+
+    if (!working.trim()) {
+      continue;
+    }
+
+    for (const matcher of matchers) {
+      if (!matcher.key) {
+        continue;
+      }
+
+      const pattern = new RegExp(`(^| )${escapeRegExp(matcher.key)}(?= |$)`, 'g');
+
+      if (pattern.test(working)) {
+        mentions.add(matcher.label);
+        working = working.replace(pattern, ' ');
+      }
+    }
+
+    const tokens = working
+      .split(' ')
+      .map((token) => token.replace(/^[^a-z0-9]+|[^a-z0-9.+#-]+$/g, ''))
+      .filter((token) => token.length > 0);
+
+    for (const token of tokens) {
+      const normalizedToken = token.replace(/^['"]+|['"]+$/g, '');
+
+      if (!normalizedToken) {
+        continue;
+      }
+
+      if (MENTION_STOP_WORDS.has(normalizedToken)) {
+        continue;
+      }
+
+      if (/^\d+$/.test(normalizedToken)) {
+        continue;
+      }
+
+      if (isStandaloneVersionToken(normalizedToken)) {
+        continue;
+      }
+
+      if (normalizedToken.length < 3 && !/\d/.test(normalizedToken)) {
+        continue;
+      }
+
+      mentions.add(formatMentionToken(normalizedToken));
+    }
+  }
+
+  return Array.from(mentions);
+}
+
+function buildMentionCloudRows(
+  responses: RawResponse[],
+  getValue: (response: RawResponse) => string | undefined,
+  matchers: Array<{ label: string; key: string }>,
+): MentionCloudEntry[] {
+  const counts = new Map<string, MentionCloudEntry>();
+
+  for (const response of responses) {
+    const mentions = extractMentionLabels(getValue(response), matchers);
+
+    for (const mention of mentions) {
+      const key = mention.toLowerCase();
+      const current = counts.get(key);
+
+      if (current) {
+        current.count += 1;
+        continue;
+      }
+
+      counts.set(key, {
+        label: mention,
+        count: 1,
+      });
+    }
+  }
+
+  return Array.from(counts.values()).sort(
+    (left, right) => right.count - left.count || left.label.localeCompare(right.label),
+  );
+}
+
+function buildLiteralWordCloudRows(
+  responses: RawResponse[],
+  getValue: (response: RawResponse) => string | undefined,
+): MentionCloudEntry[] {
+  const counts = new Map<string, MentionCloudEntry>();
+
+  for (const response of responses) {
+    const rawValue = getValue(response);
+    const normalized = rawValue ? normalizeLiteralWordSource(rawValue) : '';
+
+    if (!normalized) {
+      continue;
+    }
+
+    const tokens = normalized
+      .split(' ')
+      .map((token) => token.replace(/^[^a-z0-9]+|[^a-z0-9+#-]+$/g, ''))
+      .filter(Boolean);
+
+    for (const token of tokens) {
+      if (LITERAL_BLOCKER_STOP_WORDS.has(token)) {
+        continue;
+      }
+
+      if (/^\d+$/.test(token) || isStandaloneVersionToken(token)) {
+        continue;
+      }
+
+      if (token.length < 3 && !/\d/.test(token)) {
+        continue;
+      }
+
+      const label = formatLiteralWordToken(token);
+      const key = label.toLowerCase();
+      const current = counts.get(key);
+
+      if (current) {
+        current.count += 1;
+        continue;
+      }
+
+      counts.set(key, {
+        label,
+        count: 1,
+      });
+    }
+  }
+
+  return Array.from(counts.values()).sort(
+    (left, right) => right.count - left.count || left.label.localeCompare(right.label),
+  );
+}
+
+function buildMentionCloudLayout(
+  entries: MentionCloudEntry[],
+  width: number,
+  height: number,
+): Array<MentionCloudEntry & { x: number; y: number; fontSize: number }> {
+  const visibleEntries = entries.slice(0, 30);
+
+  if (visibleEntries.length === 0) {
+    return [];
+  }
+
+  const maxCount = visibleEntries[0]?.count ?? 1;
+  const minCount = visibleEntries[visibleEntries.length - 1]?.count ?? 1;
+  const countRange = Math.max(maxCount - minCount, 1);
+  const horizontalGap = 22;
+  const verticalGap = 18;
+  const maxRowWidth = width - 48;
+  const rows: Array<
+    Array<MentionCloudEntry & { fontSize: number; estimatedWidth: number }>
+  > = [];
+  let currentRow: Array<MentionCloudEntry & { fontSize: number; estimatedWidth: number }> = [];
+  let currentRowWidth = 0;
+
+  for (const entry of visibleEntries) {
+    const weightRatio = (entry.count - minCount) / countRange;
+    const fontSize = Math.round(16 + weightRatio * 22);
+    const estimatedWidth = Math.max(entry.label.length * fontSize * 0.56, fontSize * 3.2);
+    const nextWidth =
+      currentRow.length === 0
+        ? estimatedWidth
+        : currentRowWidth + horizontalGap + estimatedWidth;
+
+    if (currentRow.length > 0 && nextWidth > maxRowWidth) {
+      rows.push(currentRow);
+      currentRow = [];
+      currentRowWidth = 0;
+    }
+
+    currentRow.push({
+      ...entry,
+      fontSize,
+      estimatedWidth,
+    });
+    currentRowWidth =
+      currentRow.length === 1 ? estimatedWidth : currentRowWidth + horizontalGap + estimatedWidth;
+  }
+
+  if (currentRow.length > 0) {
+    rows.push(currentRow);
+  }
+
+  const maxRows = 5;
+  const visibleRows = rows.slice(0, maxRows);
+  const rowHeights = visibleRows.map((row) => Math.max(...row.map((item) => item.fontSize)));
+  const totalHeight =
+    rowHeights.reduce((sum, rowHeight) => sum + rowHeight, 0) +
+    verticalGap * Math.max(visibleRows.length - 1, 0);
+  let topOffset = Math.max((height - totalHeight) / 2 + 8, 24);
+  const positioned: Array<MentionCloudEntry & { x: number; y: number; fontSize: number }> = [];
+
+  visibleRows.forEach((row, rowIndex) => {
+    const rowWidth =
+      row.reduce((sum, item) => sum + item.estimatedWidth, 0) +
+      horizontalGap * Math.max(row.length - 1, 0);
+    let currentX = Math.max((width - rowWidth) / 2, 24);
+    const rowHeight = rowHeights[rowIndex];
+    const baselineY = topOffset + rowHeight;
+
+    row.forEach((item, itemIndex) => {
+      const verticalNudge = ((itemIndex + rowIndex) % 2 === 0 ? -1 : 1) * Math.min(item.fontSize * 0.08, 3);
+
+      positioned.push({
+        label: item.label,
+        count: item.count,
+        fontSize: item.fontSize,
+        x: currentX,
+        y: baselineY + verticalNudge,
+      });
+
+      currentX += item.estimatedWidth + horizontalGap;
+    });
+
+    topOffset += rowHeight + verticalGap;
+  });
+
+  return positioned;
+}
+
+function MentionCloud({
+  entries,
+  accent,
+  emptyLabel,
+}: {
+  entries: MentionCloudEntry[];
+  accent: 'teal' | 'blue';
+  emptyLabel: string;
+}) {
+  if (entries.length === 0) {
+    return (
+      <div className="mt-4 rounded-2xl border border-dashed border-[#d4d4d8] bg-[#fafafa] px-4 py-5 text-sm text-[#737373]">
+        {emptyLabel}
+      </div>
+    );
+  }
+
+  const visibleEntries = entries.slice(0, 30);
+  const hiddenCount = Math.max(entries.length - visibleEntries.length, 0);
+  const layout = buildMentionCloudLayout(entries, 920, 250);
+  const colorClasses =
+    accent === 'teal'
+      ? {
+          text: '#0f766e',
+          background: '#f5f5f5',
+          border: '#e5e7eb',
+          subtitle: 'text-[#737373]',
+        }
+      : {
+          text: '#1d4ed8',
+          background: '#f5f5f5',
+          border: '#e5e7eb',
+          subtitle: 'text-[#737373]',
+        };
+
+  return (
+    <>
+      <p className={`mt-4 text-xs ${colorClasses.subtitle}`}>
+        Word size reflects how many respondents mentioned each term.
+      </p>
+      <div
+        className="mt-3 overflow-hidden rounded-2xl border"
+        style={{ backgroundColor: colorClasses.background, borderColor: colorClasses.border }}
+      >
+        <svg viewBox="0 0 920 250" className="block h-[250px] w-full" role="img" aria-label="Mention word cloud">
+          {layout.map((entry) => (
+            <text
+              key={entry.label}
+              x={entry.x}
+              y={entry.y}
+              fill={colorClasses.text}
+              fontSize={entry.fontSize}
+              fontWeight={entry.count === visibleEntries[0]?.count ? 700 : 600}
+            >
+              <title>{`${entry.label}: ${entry.count} respondents`}</title>
+              {entry.label}
+            </text>
+          ))}
+        </svg>
+      </div>
+      {hiddenCount > 0 ? (
+        <p className="mt-3 text-xs text-[#8b8b8b]">
+          {`Showing the top ${visibleEntries.length} mentions in the chart. ${hiddenCount} lower-frequency mentions are still included in the counts.`}
+        </p>
+      ) : null}
+    </>
+  );
+}
 
 function createEmptyImpactFilters(): Record<ImpactFilterKey, string[]> {
   return {
@@ -1213,7 +1931,6 @@ function createEmptyCultureFilters(): Record<CultureFilterKey, string[]> {
     influenceScore: [],
     supportNeeded: [],
     handsOnHelp: [],
-    deliveryAutomationSharing: [],
     businessOnboarding: [],
   };
 }
@@ -2589,59 +3306,6 @@ function buildHandsOnHelpComparison(responses: RawResponse[]): ImpactComparisonR
   );
 }
 
-function normalizeDeliveryAutomationSharingAnswer(
-  rawValue: string | undefined,
-): DeliveryAutomationSharingKey | null {
-  const value = rawValue?.trim().replace(/\s+/g, ' ').toLowerCase();
-
-  if (!value) return null;
-  if (value.includes('i only use ai for my own tasks')) return 'noSharedBuild';
-  if (value.includes('customized an ai setup') || value.includes('personal workflow')) {
-    return 'personalOnlySetup';
-  }
-  if (value.includes('shared a template') || value.includes('a few people have tried')) {
-    return 'fewPeopleTried';
-  }
-  return null;
-}
-
-function buildDeliveryAutomationSharingDistribution(
-  responses: RawResponse[],
-): DeliveryAutomationSharingDistributionRow[] {
-  const scopedResponses = responses.filter((response) => response.surveyType === 'delivery-engineering');
-  const respondents = scopedResponses.length;
-  const counts = DELIVERY_AUTOMATION_SHARING_SERIES.reduce(
-    (acc, entry) => ({
-      ...acc,
-      [entry.key]: 0,
-    }),
-    {} as Record<DeliveryAutomationSharingKey, number>,
-  );
-
-  for (const response of scopedResponses) {
-    const key = normalizeDeliveryAutomationSharingAnswer(response.q4_7);
-    if (key) {
-      counts[key] += 1;
-    }
-  }
-
-  const shares = DELIVERY_AUTOMATION_SHARING_SERIES.reduce(
-    (acc, entry) => ({
-      ...acc,
-      [entry.key]: respondents > 0 ? roundToOne((counts[entry.key] / respondents) * 100) : 0,
-    }),
-    {} as Record<DeliveryAutomationSharingKey, number>,
-  );
-
-  return [
-    {
-      cohort: 'Delivery & engineering',
-      respondents,
-      ...shares,
-    },
-  ];
-}
-
 function normalizeBusinessOnboardingAnswer(
   rawValue: string | undefined,
 ): BusinessOnboardingKey | null {
@@ -3452,6 +4116,18 @@ function averageDimensionScores(members: Individual[]): Record<OrgDimension, num
       ),
     }),
     {} as Record<OrgDimension, number>,
+  );
+}
+
+function techScoresFromOrgDimensions(
+  dimensions: Record<OrgDimension, number>,
+): Record<TechDimension, number> {
+  return TECH_DIMENSIONS.reduce(
+    (scores, dimension) => ({
+      ...scores,
+      [dimension]: dimensions[dimension],
+    }),
+    {} as Record<TechDimension, number>,
   );
 }
 
@@ -4520,6 +5196,7 @@ export default function OrganizationView() {
   const { individuals, rawResponses, resolvePersonName } = useSurveyData();
   const { isSensitiveDataHidden } = useSensitiveData();
   const { clearPendingNavigation } = useNavigationPending();
+  const [insightsMode, setInsightsMode] = useState<'mustKnow' | 'deepDive'>('mustKnow');
   const [selectedToolDepartments, setSelectedToolDepartments] = useState<string[]>([]);
   const [selectedToolSeniorities, setSelectedToolSeniorities] = useState<string[]>([]);
   const [selectedToolTeams, setSelectedToolTeams] = useState<string[]>([]);
@@ -4556,7 +5233,7 @@ export default function OrganizationView() {
   );
   const [businessUsageMode, setBusinessUsageMode] = useState<UsageCategoryMode>('needle');
   const [deliveryUsageMode, setDeliveryUsageMode] = useState<UsageCategoryMode>('needle');
-  const [usageImpactScope, setUsageImpactScope] = useState<UsageImpactScope>('department');
+  const [usageImpactScope, setUsageImpactScope] = useState<UsageImpactScope>('team');
   const [hiddenMaturityDistributionLevels, setHiddenMaturityDistributionLevels] = useState<MaturityDistributionLevelKey[]>([]);
   const [heatmapSort, setHeatmapSort] = useState<{
     key: HeatmapSortKey | null;
@@ -4575,13 +5252,39 @@ export default function OrganizationView() {
   const [showAllDimensionHeatmapRows, setShowAllDimensionHeatmapRows] = useState(false);
   const [showAllProjectRankingRows, setShowAllProjectRankingRows] = useState(false);
   const [isPreparingAiResearchPack, setIsPreparingAiResearchPack] = useState(false);
+  const [isAskAiOpen, setIsAskAiOpen] = useState(false);
+  const { isTableSortPending, queueTableSort, clearTableSortPending } = useTableSortPending();
   const aiResearchPackRef = useRef<OrganizationAiResearchPack | null>(null);
   const aiResearchPackPromiseRef = useRef<Promise<OrganizationAiResearchPack> | null>(null);
   const aiResearchPackVersionRef = useRef(0);
   const orgMaturityMap = useMemo(() => buildOrgMaturityMapSnapshot(rawResponses), [rawResponses]);
+  const orgArchetype = useMemo(
+    () =>
+      resolveTeamArchetype(
+        orgMaturityMap.data.reduce(
+          (scores, point) => {
+            scores[point.dimension] = point.current;
+            return scores;
+          },
+          {} as Record<TechDimension, number>,
+        ),
+      ),
+    [orgMaturityMap],
+  );
+  const organizationSectionLinks =
+    insightsMode === 'mustKnow'
+      ? ORGANIZATION_MUST_KNOW_SECTION_LINKS
+      : ORGANIZATION_DEEP_DIVE_SECTION_LINKS;
+  const isMustKnowMode = insightsMode === 'mustKnow';
   useEffect(() => {
     clearPendingNavigation('/organization');
   }, [clearPendingNavigation]);
+
+  useEffect(() => {
+    if (isTableSortPending) {
+      clearTableSortPending();
+    }
+  }, [clearTableSortPending, heatmapSort, isTableSortPending, projectRankingSort]);
 
   useEffect(() => {
     aiResearchPackVersionRef.current += 1;
@@ -4620,6 +5323,51 @@ export default function OrganizationView() {
     });
   }, [individuals]);
 
+  const individualArchetypeBubbleRows = useMemo<ArchetypeBubbleRow[]>(() => {
+    const rowsByArchetype = new Map<
+      string,
+      {
+        archetype: IndividualArchetypeProfile;
+        people: typeof individuals;
+      }
+    >();
+
+    for (const person of individuals) {
+      const archetype = resolveIndividualArchetype(person.scores);
+      const existing = rowsByArchetype.get(archetype.id);
+
+      if (existing) {
+        existing.people.push(person);
+        continue;
+      }
+
+      rowsByArchetype.set(archetype.id, {
+        archetype,
+        people: [person],
+      });
+    }
+
+    return Array.from(rowsByArchetype.values())
+      .map(({ archetype, people }) => ({
+        id: archetype.id,
+        label: archetype.label,
+        signal: archetype.signal,
+        scopeCount: people.length,
+        respondentCount: people.length,
+        usageImpactAverage: average(
+          people.map((person) => average([person.scores.Usage, person.scores.Impact])),
+        ),
+        cultureVisionAverage: average(
+          people.map((person) => average([person.scores.Culture, person.scores.Vision])),
+        ),
+      }))
+      .sort(
+        (left, right) =>
+          right.scopeCount - left.scopeCount ||
+          right.usageImpactAverage - left.usageImpactAverage,
+      );
+  }, [individuals]);
+
   const dimensionHeatmap = useMemo<HeatmapRow[]>(() => {
     const membersByDepartment = new Map<string, typeof individuals>();
 
@@ -4636,6 +5384,7 @@ export default function OrganizationView() {
       .map(([department, members]) => {
         const dimensions = averageDimensionScores(members);
         const overall = average(TECH_DIMENSIONS.map((dimension) => dimensions[dimension]));
+        const archetype = resolveTeamArchetype(techScoresFromOrgDimensions(dimensions));
 
         return {
           id: slugifyScopeName(department),
@@ -4643,6 +5392,7 @@ export default function OrganizationView() {
           respondents: members.length,
           overall,
           level: LEVEL_LABELS[scoreToLevel(overall)],
+          archetype,
           ...dimensions,
         };
       });
@@ -4674,6 +5424,8 @@ export default function OrganizationView() {
             return left.overall - right.overall;
           case 'level':
             return (levelNumberMap[left.level] ?? 0) - (levelNumberMap[right.level] ?? 0);
+          case 'archetype':
+            return left.archetype.label.localeCompare(right.archetype.label);
           case 'respondents':
             return left.respondents - right.respondents;
           default:
@@ -4694,6 +5446,46 @@ export default function OrganizationView() {
         : sortedDimensionHeatmap.slice(0, 8),
     [showAllDimensionHeatmapRows, sortedDimensionHeatmap],
   );
+
+  const departmentArchetypeBubbleRows = useMemo<ArchetypeBubbleRow[]>(() => {
+    const rowsByArchetype = new Map<
+      string,
+      {
+        archetype: TeamArchetypeProfile;
+        rows: HeatmapRow[];
+      }
+    >();
+
+    for (const row of dimensionHeatmap) {
+      const existing = rowsByArchetype.get(row.archetype.id);
+
+      if (existing) {
+        existing.rows.push(row);
+        continue;
+      }
+
+      rowsByArchetype.set(row.archetype.id, {
+        archetype: row.archetype,
+        rows: [row],
+      });
+    }
+
+    return Array.from(rowsByArchetype.values())
+      .map(({ archetype, rows }) => ({
+        id: archetype.id,
+        label: archetype.label,
+        signal: archetype.signal,
+        scopeCount: rows.length,
+        respondentCount: rows.reduce((sum, row) => sum + row.respondents, 0),
+        usageImpactAverage: average(rows.map((row) => average([row.Usage, row.Impact]))),
+        cultureVisionAverage: average(rows.map((row) => average([row.Culture, row.Vision]))),
+      }))
+      .sort(
+        (left, right) =>
+          right.scopeCount - left.scopeCount ||
+          right.usageImpactAverage - left.usageImpactAverage,
+      );
+  }, [dimensionHeatmap]);
 
   const usageImpactQuadrant = useMemo(() => {
     const membersByScope = new Map<string, typeof individuals>();
@@ -4734,6 +5526,39 @@ export default function OrganizationView() {
         };
       });
   }, [individuals, usageImpactScope]);
+
+  const organizationUsageImpactDepartmentRows = useMemo(() => {
+    const membersByDepartment = new Map<string, typeof individuals>();
+
+    for (const person of individuals) {
+      for (const department of person.allDepartments) {
+        if (!department) {
+          continue;
+        }
+
+        const existing = membersByDepartment.get(department) ?? [];
+        existing.push(person);
+        membersByDepartment.set(department, existing);
+      }
+    }
+
+    return Array.from(membersByDepartment.entries())
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([department, members]) => {
+        const overall = average(members.map((member) => member.overallScore));
+        const usage = roundToOne(average(members.map((member) => member.scores.Usage)));
+        const impact = roundToOne(average(members.map((member) => member.scores.Impact)));
+
+        return {
+          name: department,
+          usage,
+          impact,
+          respondents: members.length,
+          level: LEVEL_LABELS[scoreToLevel(overall)],
+          color: usageImpactQuadrantColor(usage, impact),
+        };
+      });
+  }, [individuals]);
 
   const usageImpactQuadrantSummary = useMemo(() => {
     const totals = {
@@ -4799,6 +5624,7 @@ export default function OrganizationView() {
         const dimensions = averageDimensionScores(members);
         const overall = average(TECH_DIMENSIONS.map((dimension) => dimensions[dimension]));
         const level = LEVEL_LABELS[scoreToLevel(overall)];
+        const archetype = resolveTeamArchetype(techScoresFromOrgDimensions(dimensions));
 
         return {
           id: slugifyScopeName(projectName),
@@ -4806,6 +5632,7 @@ export default function OrganizationView() {
           respondents: members.length,
           overall,
           level,
+          archetype,
           dimensions,
         };
       })
@@ -4820,19 +5647,7 @@ export default function OrganizationView() {
     [hiddenMaturityDistributionLevels, maturityDistribution],
   );
 
-  const championCount = useMemo(
-    () =>
-      buildChampionRows(individuals).filter(
-        (row) => row.championScore >= AI_CHAMPION_SCORE_THRESHOLD,
-      ).length,
-    [individuals],
-  );
-  const jumpToAiChampions = () => {
-    document.getElementById('org-ai-champions')?.scrollIntoView({
-      behavior: 'smooth',
-      block: 'start',
-    });
-  };
+  const resistanceSummary = useMemo(() => buildResistanceSummary(rawResponses), [rawResponses]);
 
   const summaryCards = useMemo<SummaryCard[]>(() => {
     const respondentCount = individuals.length;
@@ -4844,14 +5659,6 @@ export default function OrganizationView() {
     const level45PeopleCount = individuals.filter((person) => person.overallLevel >= 4).length;
     const level45PeopleShare =
       respondentCount > 0 ? Math.round((level45PeopleCount / respondentCount) * 100) : 0;
-    const projectCount = projectRankingRows.length;
-    const level45ProjectCount = projectRankingRows.filter(
-      (project) => scoreToLevel(project.overall) >= 4,
-    ).length;
-    const level45ProjectShare =
-      projectCount > 0 ? Math.round((level45ProjectCount / projectCount) * 100) : 0;
-    const championShare =
-      respondentCount > 0 ? Math.round((championCount / respondentCount) * 100) : 0;
 
     return [
       {
@@ -4867,22 +5674,37 @@ export default function OrganizationView() {
         detail: `${level45PeopleCount} of ${respondentCount} respondents at advanced maturity`,
       },
       {
-        title: 'Level 4–5 project share',
-        value: `${level45ProjectShare}%`,
-        detail: `${level45ProjectCount} of ${projectCount} projects at advanced maturity`,
-      },
-      {
-        title: 'AI champions',
-        value: `${championShare}%`,
-        detail: `${championCount} of ${respondentCount} ${
-          respondentCount === 1 ? 'respondent clears' : 'respondents clear'
-        } the champion threshold`,
-        onClick: jumpToAiChampions,
+        title: 'Resistance score',
+        value: `${resistanceSummary.score.toFixed(1)} / 5`,
+        detail:
+          resistanceSummary.respondentCount > 0
+            ? `Lower is better; ${resistanceSummary.highResistanceShare}% show strong resistance signals`
+            : 'Lower is better; no scored responses yet',
+        helpText: RESISTANCE_SCORE_HELP_TEXT,
+        hoverValue: `${resistanceSummary.score.toFixed(2)} / 5`,
       },
     ];
-  }, [championCount, individuals, jumpToAiChampions, projectRankingRows]);
+  }, [individuals, resistanceSummary]);
 
   const topChampionRows = useMemo(() => buildTopChampionRows(individuals), [individuals]);
+  const organizationChampionCount = useMemo(
+    () =>
+      buildChampionRows(individuals).filter(
+        (row) => row.championScore >= AI_CHAMPION_SCORE_THRESHOLD,
+      ).length,
+    [individuals],
+  );
+  const organizationChampionShare = useMemo(() => {
+    if (individuals.length === 0) {
+      return 0;
+    }
+
+    return (organizationChampionCount / individuals.length) * 100;
+  }, [individuals.length, organizationChampionCount]);
+  const detailedReviewCohorts = useMemo(
+    () => buildExperienceReviewCohorts(individuals),
+    [individuals],
+  );
 
   const sortedProjectRankingRows = useMemo(() => {
     const rows = [...projectRankingRows];
@@ -4903,6 +5725,8 @@ export default function OrganizationView() {
             return left.overall - right.overall;
           case 'level':
             return (levelNumberMap[left.level] ?? 0) - (levelNumberMap[right.level] ?? 0);
+          case 'archetype':
+            return left.archetype.label.localeCompare(right.archetype.label);
           case 'respondents':
             return left.respondents - right.respondents;
           default:
@@ -4927,6 +5751,50 @@ export default function OrganizationView() {
         : sortedProjectRankingRows.slice(0, 10),
     [showAllProjectRankingRows, sortedProjectRankingRows],
   );
+
+  const projectArchetypeBubbleRows = useMemo<ArchetypeBubbleRow[]>(() => {
+    const rowsByArchetype = new Map<
+      string,
+      {
+        archetype: TeamArchetypeProfile;
+        rows: ProjectRankingRow[];
+      }
+    >();
+
+    for (const row of projectRankingRows) {
+      const existing = rowsByArchetype.get(row.archetype.id);
+
+      if (existing) {
+        existing.rows.push(row);
+        continue;
+      }
+
+      rowsByArchetype.set(row.archetype.id, {
+        archetype: row.archetype,
+        rows: [row],
+      });
+    }
+
+    return Array.from(rowsByArchetype.values())
+      .map(({ archetype, rows }) => ({
+        id: archetype.id,
+        label: archetype.label,
+        signal: archetype.signal,
+        scopeCount: rows.length,
+        respondentCount: rows.reduce((sum, row) => sum + row.respondents, 0),
+        usageImpactAverage: average(
+          rows.map((row) => average([row.dimensions.Usage, row.dimensions.Impact])),
+        ),
+        cultureVisionAverage: average(
+          rows.map((row) => average([row.dimensions.Culture, row.dimensions.Vision])),
+        ),
+      }))
+      .sort(
+        (left, right) =>
+          right.scopeCount - left.scopeCount ||
+          right.usageImpactAverage - left.usageImpactAverage,
+      );
+  }, [projectRankingRows]);
 
   const usageDepartmentOptions = useMemo(
     () => [
@@ -5128,6 +5996,16 @@ export default function OrganizationView() {
     [rawResponses],
   );
 
+  const gapResistanceDepartmentRows = useMemo(
+    () => buildResistanceByScopeRows(rawResponses, 'department'),
+    [rawResponses],
+  );
+
+  const gapResistanceTeamRows = useMemo(
+    () => buildResistanceByScopeRows(rawResponses, 'team'),
+    [rawResponses],
+  );
+
   const gapSupportDemandDepartmentRows = useMemo(
     () => buildSupportDemandSkillsGapRows(rawResponses, 'department'),
     [rawResponses],
@@ -5168,6 +6046,71 @@ export default function OrganizationView() {
     [rawResponses],
   );
 
+  const organizationSuggestedGoals = useMemo(
+    () =>
+      buildTeamSuggestedGoals({
+        scopedIndividuals: individuals,
+        allIndividuals: individuals,
+        championShare: organizationChampionShare,
+        resistanceSummary: {
+          score: resistanceSummary.score,
+          highResistanceShare: resistanceSummary.highResistanceShare,
+        },
+        usageImpactData: organizationUsageImpactDepartmentRows.map((row) => ({
+          name: row.name,
+          role: '',
+          overall: 0,
+          level: row.level,
+          color: row.color,
+          size: row.respondents,
+          usage: row.usage,
+          impact: row.impact,
+        })),
+        supportDemandRows: gapSupportDemandDepartmentRows.map((row) => ({
+          name: row.name,
+          role: '',
+          overall: 0,
+          level: '',
+          color: row.color,
+          size: row.respondents,
+          baselineSkills: row.baselineSkills,
+          supportDemand: row.supportDemand,
+          supportSignals: row.respondents,
+        })),
+        toolAccessRows: gapToolAccessDepartmentRows.map((row) => ({
+          name: row.name,
+          role: '',
+          overall: 0,
+          level: '',
+          color: row.color,
+          size: row.respondents,
+          access: row.access,
+          costMaturity: row.costMaturity,
+          fundedAccess: row.companyFundedShare >= 50,
+        })),
+        workflowRows: gapWorkflowTransformationDepartmentRows.map((row) => ({
+          name: row.name,
+          role: '',
+          overall: 0,
+          level: '',
+          color: row.color,
+          size: row.respondents,
+          hoursSaved: row.hoursSaved,
+          transformation: row.transformation,
+        })),
+      }),
+    [
+      gapSupportDemandDepartmentRows,
+      gapToolAccessDepartmentRows,
+      gapWorkflowTransformationDepartmentRows,
+      individuals,
+      organizationChampionShare,
+      organizationUsageImpactDepartmentRows,
+      resistanceSummary.highResistanceShare,
+      resistanceSummary.score,
+    ],
+  );
+
   const gapVisionToActionDepartmentRows = useMemo(
     () => buildVisionToActionGapRows(rawResponses, 'department'),
     [rawResponses],
@@ -5186,6 +6129,21 @@ export default function OrganizationView() {
   const gapCultureSpreadTeamRows = useMemo(
     () => buildCultureSpreadGapRows(rawResponses, 'team'),
     [rawResponses],
+  );
+
+  const gapMaturityVisibilityDepartmentRows = useMemo(
+    () => buildTeamValidatedScopeRows(rawResponses, 'department'),
+    [rawResponses],
+  );
+
+  const gapMaturityVisibilityTeamRows = useMemo(
+    () => buildTeamValidatedScopeRows(rawResponses, 'team'),
+    [rawResponses],
+  );
+
+  const deviatingPeopleRows = useMemo(
+    () => buildDeviatingPeopleRows(individuals, rawResponses),
+    [individuals, rawResponses],
   );
 
   const businessWorkflowUsage = useMemo(
@@ -5336,14 +6294,6 @@ export default function OrganizationView() {
     [filteredCultureResponses],
   );
 
-  const deliveryAutomationSharingDistribution = useMemo(
-    () =>
-      buildDeliveryAutomationSharingDistribution(
-        filteredCultureResponses.deliveryAutomationSharing,
-      ),
-    [filteredCultureResponses],
-  );
-
   const businessOnboardingDistribution = useMemo(
     () =>
       buildBusinessOnboardingDistribution(filteredCultureResponses.businessOnboarding),
@@ -5412,14 +6362,6 @@ export default function OrganizationView() {
     [filteredImpactResponses],
   );
 
-  const filteredDeliveryAutomationSharingResponses = useMemo(
-    () =>
-      filteredCultureResponses.deliveryAutomationSharing.filter(
-        (response) => response.surveyType === 'delivery-engineering',
-      ),
-    [filteredCultureResponses],
-  );
-
   const filteredBusinessOnboardingResponses = useMemo(
     () =>
       filteredCultureResponses.businessOnboarding.filter(
@@ -5485,6 +6427,44 @@ export default function OrganizationView() {
       .sort((left, right) => right.count - left.count || left.label.localeCompare(right.label))
       .slice(0, 10);
   }, [filteredModelResponses]);
+
+  const toolMentionCloud = useMemo(
+    () => buildMentionCloudRows(filteredToolResponses, (response) => response.q1_2, TOOL_MENTION_MATCHERS),
+    [filteredToolResponses],
+  );
+
+  const modelMentionCloud = useMemo(
+    () =>
+      buildMentionCloudRows(
+        filteredModelResponses,
+        (response) => response.q1_3,
+        MODEL_MENTION_MATCHERS,
+      ),
+    [filteredModelResponses],
+  );
+
+  const blockerOpenTextResponses = useMemo(
+    () =>
+      filteredImpactResponses.nonAiBlocker.filter((response) => {
+        const value =
+          response.surveyType === 'business'
+            ? response.q_open_final || response.q3_blocker
+            : response.q4_open || response.q3_12;
+
+        return Boolean(value?.trim());
+      }),
+    [filteredImpactResponses],
+  );
+
+  const blockerWordCloud = useMemo(
+    () =>
+      buildLiteralWordCloudRows(blockerOpenTextResponses, (response) =>
+        response.surveyType === 'business'
+          ? response.q_open_final || response.q3_blocker
+          : response.q4_open || response.q3_12,
+      ),
+    [blockerOpenTextResponses],
+  );
 
   const toolFiltersActive =
     selectedToolDepartments.length > 0 ||
@@ -5810,20 +6790,22 @@ export default function OrganizationView() {
   };
 
   const toggleHeatmapSort = (key: HeatmapSortKey) => {
-    setHeatmapSort((current) => ({
-      key:
-        current.key === key && current.direction === 'desc'
-          ? null
-          : key,
-      direction:
-        current.key !== key
-          ? 'asc'
-          : current.direction === 'asc'
-            ? 'desc'
-            : current.direction === 'desc'
-              ? null
-              : 'asc',
-    }));
+    queueTableSort(() => {
+      setHeatmapSort((current) => ({
+        key:
+          current.key === key && current.direction === 'desc'
+            ? null
+            : key,
+        direction:
+          current.key !== key
+            ? 'asc'
+            : current.direction === 'asc'
+              ? 'desc'
+              : current.direction === 'desc'
+                ? null
+                : 'asc',
+      }));
+    });
   };
 
   const sortIndicator = (key: HeatmapSortKey) => {
@@ -5835,17 +6817,19 @@ export default function OrganizationView() {
   };
 
   const toggleProjectRankingSort = (key: ProjectRankingSortKey) => {
-    setProjectRankingSort((current) => ({
-      key,
-      direction:
-        current.key === key
-          ? current.direction === 'asc'
-            ? 'desc'
-            : 'asc'
-          : key === 'name'
-            ? 'asc'
-            : 'desc',
-    }));
+    queueTableSort(() => {
+      setProjectRankingSort((current) => ({
+        key,
+        direction:
+          current.key === key
+            ? current.direction === 'asc'
+              ? 'desc'
+              : 'asc'
+            : key === 'name'
+              ? 'asc'
+              : 'desc',
+      }));
+    });
   };
 
   const projectRankingSortIndicator = (key: ProjectRankingSortKey) => {
@@ -5870,6 +6854,8 @@ export default function OrganizationView() {
             individuals,
             rawResponses,
             resolvePersonName,
+            scopeType: 'organization',
+            scopeLabel: 'Organization AI analysis',
           }),
         )
         .then((researchPack) => {
@@ -5913,9 +6899,11 @@ export default function OrganizationView() {
     }
   };
 
-  const openExternalAi = (url: string) => {
-    window.open(url, '_blank', 'noopener,noreferrer');
-  };
+  const askAiStarterQuestions = [
+    'What are the biggest organization-wide maturity gaps?',
+    'Which teams or departments need the most support next?',
+    'What should leadership prioritize over the next quarter?',
+  ];
 
   const buildImpactFilterProps = (key: ImpactFilterKey, label: string) => ({
     respondentCount: filteredImpactResponses[key].length,
@@ -6024,6 +7012,7 @@ export default function OrganizationView() {
 
   const cultureSectionProps = {
     topChampionRows,
+    detailedReviewCohorts,
     growthMomentum: {
       title: 'AI growth momentum',
       description:
@@ -6126,22 +7115,6 @@ export default function OrganizationView() {
       series: KNOWLEDGE_ARTIFACT_SERIES,
       stackId: 'culture-knowledge-artifacts',
     },
-    deliveryAutomationSharing: {
-      title: 'Delivery-only shared automation building',
-      description: 'Very valuable, but delivery-specific.',
-      filterProps: buildCultureFilterProps(
-        'deliveryAutomationSharing',
-        'delivery shared automation building',
-        filteredDeliveryAutomationSharingResponses.length,
-      ),
-      data: deliveryAutomationSharingDistribution,
-      series: DELIVERY_AUTOMATION_SHARING_SERIES,
-      stackId: 'culture-delivery-automation-sharing',
-      emptyState: 'No delivery & engineering respondents match the current department and team filter.',
-      respondentCount: filteredDeliveryAutomationSharingResponses.length,
-      cohortColor: IMPACT_COHORT_COLORS.delivery,
-      cohortLabel: 'Delivery & engineering',
-    },
     businessOnboarding: {
       title: 'Business-only onboarding on AI practices',
       description:
@@ -6243,7 +7216,7 @@ export default function OrganizationView() {
   return (
     <div className="relative">
       <FloatingSectionNav
-        items={ORGANIZATION_SECTION_LINKS}
+        items={organizationSectionLinks}
         showItemLabelsOnHover
         labelAlignment="right"
       />
@@ -6255,20 +7228,42 @@ export default function OrganizationView() {
         subtitleClassName="mb-6 text-sm text-[#8b8b8b]"
       />
 
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="inline-flex w-fit items-center rounded-full border border-[#e5e7eb] bg-white p-1 shadow-sm">
+          {[
+            { id: 'mustKnow' as const, label: 'Must-know' },
+            { id: 'deepDive' as const, label: 'Deep analysis' },
+          ].map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              onClick={() => setInsightsMode(option.id)}
+              className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                insightsMode === option.id
+                  ? 'bg-[#3f3f46] text-white shadow-sm'
+                  : 'text-[#6b7280] hover:bg-[#f5f5f5] hover:text-[#242424]'
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <section id="org-top-summary" className="scroll-mt-24">
         <SectionHeader
           title="Top summary"
-          subtitle="Fast-read KPIs for overall maturity, movement, and breadth of adoption."
+          subtitle="Fast-read KPIs for overall maturity, movement, breadth of adoption, and adoption resistance."
         />
 
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
+        <div className="flex flex-wrap gap-3">
           {summaryCards.map((card) => (
             <button
               type="button"
               key={card.title}
               onClick={card.onClick}
               className={
-                `${card.accent
+                `w-full sm:w-[260px] ${card.accent
                   ? 'flex min-h-[126px] flex-col rounded-2xl bg-[linear-gradient(135deg,#0f766e_0%,#1d4ed8_100%)] px-5 py-4 text-white shadow-sm'
                   : 'flex min-h-[126px] flex-col rounded-2xl border border-[#eaeaea] bg-white px-4 py-3 shadow-sm'} ${
                   card.onClick
@@ -6286,6 +7281,31 @@ export default function OrganizationView() {
               >
                 <span className="inline-flex items-center gap-1.5">
                   {card.title}
+                  {card.helpText ? (
+                    <InfoTooltip>
+                      <TooltipTrigger asChild>
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          onClick={(event) => event.stopPropagation()}
+                          onKeyDown={(event) => event.stopPropagation()}
+                          className={`inline-flex h-4 w-4 items-center justify-center rounded-full ${
+                            card.accent ? 'text-white/75' : 'text-[#9ca3af]'
+                          }`}
+                          aria-label={`About ${card.title}`}
+                        >
+                          <CircleHelp className="h-3.5 w-3.5" />
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent
+                        side="top"
+                        sideOffset={8}
+                        className="max-w-[260px] px-3 py-2 text-[12px] leading-relaxed"
+                      >
+                        <div className="text-white">{card.helpText}</div>
+                      </TooltipContent>
+                    </InfoTooltip>
+                  ) : null}
                   {card.onClick ? (
                     <ArrowDown className={card.accent ? 'h-3 w-3 text-white/70' : 'h-3 w-3 text-[#9ca3af]'} />
                   ) : null}
@@ -6366,39 +7386,20 @@ export default function OrganizationView() {
                 research pack for ChatGPT or Claude
               </h3>
               <p className="mt-2 text-sm leading-6 text-[#667085]">
-                Export a markdown brief with survey context, organization snapshot, raw dimension
-                scores for individuals, departments, and projects, plus question-level responses.
+                Ask questions in the sidebar or download a markdown brief with survey context,
+                organization snapshot, raw dimension scores for individuals, departments, and
+                projects, plus question-level responses.
               </p>
             </div>
 
             <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
-              <button
-                type="button"
-                onClick={() =>
-                  openExternalAi(
-                    'https://chatgpt.com/g/g-6a1748e9d82c81918cc004536a458297-ai-maturity-index-analyst',
-                  )
-                }
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-[#e5e7eb] bg-white px-4 text-sm font-semibold text-[#242424] transition hover:border-[#d4d4d8] hover:bg-[#f8f8f9] focus:outline-none focus:ring-[3px] focus:ring-[#c7c7cc]/25"
-              >
-                <img src="/chatgpt-logo.svg" alt="" aria-hidden="true" className="h-4 w-4" />
-                Open ChatGPT
-              </button>
-
-              <button
-                type="button"
-                onClick={() => openExternalAi('https://claude.ai/')}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-[#e5e7eb] bg-white px-4 text-sm font-semibold text-[#242424] transition hover:border-[#d4d4d8] hover:bg-[#f8f8f9] focus:outline-none focus:ring-[3px] focus:ring-[#c7c7cc]/25"
-              >
-                <img src="/claude-logo.png" alt="" aria-hidden="true" className="h-4 w-4" />
-                Open Claude
-              </button>
+              <AskAiTriggerButton onClick={() => setIsAskAiOpen(true)} />
 
               <button
                 type="button"
                 onClick={downloadAiResearchPack}
                 disabled={isPreparingAiResearchPack}
-                className="inline-flex h-11 items-center justify-center rounded-2xl border border-[#d4d4d8] bg-[#f5f5f5] px-5 text-sm font-semibold text-[#3f3f46] transition hover:border-[#c4c4c7] hover:bg-[#ededee] focus:outline-none focus:ring-[3px] focus:ring-[#c7c7cc]/25 disabled:cursor-wait disabled:opacity-70"
+                className="inline-flex h-11 cursor-pointer items-center justify-center rounded-2xl border border-[#d4d4d8] bg-[#f5f5f5] px-5 text-sm font-semibold text-[#3f3f46] transition hover:border-[#c4c4c7] hover:bg-[#ededee] focus:outline-none focus:ring-[3px] focus:ring-[#c7c7cc]/25 disabled:cursor-wait disabled:opacity-70"
               >
                 {isPreparingAiResearchPack ? 'Preparing AI research pack...' : 'Download AI research pack'}
               </button>
@@ -6413,14 +7414,36 @@ export default function OrganizationView() {
           subtitle="See whether maturity is broad-based or concentrated, and which departments are ahead or lagging by dimension."
         />
 
-        <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
-          <section className="rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
-            <h3 className="text-lg font-semibold tracking-tight text-[#242424]">
-              Organization maturity map
-            </h3>
-            <p className="mt-1 text-sm text-[#7a7a7a]">
-              {orgMaturityMap.detail}
-            </p>
+        <div className="grid gap-5 xl:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.8fr)_minmax(320px,0.8fr)]">
+          <section className="group relative rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
+            <ChartFeedback
+              chartId="organization_maturity_map"
+              chartTitle="Organization maturity map"
+              page="organization"
+              eventProperties={{
+                chart_section: 'where_are_we_now',
+                respondent_count: individuals.length,
+              }}
+            />
+            <div className="pr-24">
+              <h3 className="text-lg font-semibold tracking-tight text-[#242424]">
+                Organization maturity map
+              </h3>
+              <p className="mt-1 text-sm text-[#7a7a7a]">
+                {orgMaturityMap.detail}
+              </p>
+            </div>
+            <div className="mt-4 rounded-2xl border border-[#1d4ed8]/20 bg-[linear-gradient(135deg,#0f766e_0%,#1d4ed8_100%)] p-4 text-white shadow-sm">
+              <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-white/75">
+                Organization archetype
+              </div>
+              <div className="mt-2 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+                <div className="inline-flex w-fit items-center rounded-full border border-white/25 bg-white/15 px-3 py-1 text-sm font-semibold text-white shadow-sm backdrop-blur-sm">
+                  {orgArchetype.label}
+                </div>
+                <p className="max-w-2xl text-sm text-white/85">{orgArchetype.signal}</p>
+              </div>
+            </div>
 
             <div className="mt-6 h-[420px]">
               <ResponsiveContainer width="100%" height="100%">
@@ -6519,7 +7542,8 @@ export default function OrganizationView() {
             </div>
           </section>
 
-          <section className="rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
+          <section className="group relative rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
+            <ChartFeedback chartTitle="Maturity level distribution" page="organization" />
             <h3 className="text-lg font-semibold tracking-tight text-[#242424]">
               Maturity level distribution
             </h3>
@@ -6605,6 +7629,15 @@ export default function OrganizationView() {
               </div>
             </div>
           </section>
+
+          <ProjectArchetypeBubbleChart
+            rows={individualArchetypeBubbleRows}
+            scopeLabel="Individual"
+            scopeLabelPlural="Individuals"
+            title="Individual archetype bubble chart"
+            colors={INDIVIDUAL_ARCHETYPE_BUBBLE_COLORS}
+            cardClassName="bg-white shadow-sm"
+          />
         </div>
 
         <section className="mt-5 rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
@@ -6615,175 +7648,77 @@ export default function OrganizationView() {
             This replaces one score per department with a more actionable view of exactly where intervention is needed.
           </p>
 
-          <div className="mt-5 overflow-x-auto">
-            <table className="w-full min-w-[1360px]">
-              <thead>
-                <tr className="border-b border-[#eaeaea] text-left text-xs text-[#8b8b8b]">
-                  {[
-                    { key: 'department' as const, label: 'Department' },
-                    { key: 'overall' as const, label: 'Overall' },
-                    { key: 'level' as const, label: 'Level' },
-                    ...DIMENSION_KEYS.map((dimension) => ({
-                      key: dimension,
-                      label: DIMENSION_LABELS[dimension],
-                    })),
-                    { key: 'respondents' as const, label: 'Responses' },
-                  ].map((header) => (
-                    <th
-                      key={header.key}
-                      className={`px-4 py-3 font-medium ${
-                        header.key === 'department' ? 'w-[200px] min-w-[200px] max-w-[200px]' : ''
-                      }`}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => toggleHeatmapSort(header.key)}
-                        className={`items-center gap-1 transition-colors hover:text-[#525252] ${
-                          header.key === 'department' ? 'flex w-full min-w-0' : 'inline-flex'
+          <div className="mt-5 grid gap-5 xl:grid-cols-[360px_minmax(0,1fr)]">
+            <ProjectArchetypeBubbleChart
+              rows={departmentArchetypeBubbleRows}
+              scopeLabel="Department"
+              scopeLabelPlural="Departments"
+            />
+
+            <div className="min-w-0 overflow-x-auto">
+              <table className="w-full min-w-[1540px]">
+                <thead>
+                  <tr className="border-b border-[#eaeaea] text-left text-xs text-[#8b8b8b]">
+                    {[
+                      { key: 'department' as const, label: 'Department' },
+                      { key: 'overall' as const, label: 'Overall' },
+                      { key: 'level' as const, label: 'Level' },
+                      { key: 'archetype' as const, label: 'Archetype' },
+                      ...DIMENSION_KEYS.map((dimension) => ({
+                        key: dimension,
+                        label: DIMENSION_LABELS[dimension],
+                      })),
+                      { key: 'respondents' as const, label: 'Responses' },
+                    ].map((header) => (
+                      <th
+                        key={header.key}
+                        className={`px-4 py-3 font-medium ${
+                          header.key === 'department'
+                            ? 'w-[200px] min-w-[200px] max-w-[200px]'
+                            : header.key === 'archetype'
+                              ? 'w-[220px] min-w-[220px] max-w-[220px]'
+                              : ''
                         }`}
                       >
-                        <span>{header.label}</span>
-                        <span className="text-[11px]">{sortIndicator(header.key)}</span>
-                      </button>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {visibleDimensionHeatmapRows.map((row) => (
-                  <tr key={row.id} className="border-b border-[#eaeaea] last:border-b-0">
-                    <td className="w-[200px] min-w-[200px] max-w-[200px] px-4 py-3 font-medium text-[#242424]">
-                      <div className="flex min-w-0 items-center gap-2">
-                        <span className="block flex-1 truncate">{row.department}</span>
-                        <Link
-                          to={`/teams?scope=department&scopeId=${row.id}`}
-                          className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[#8b8b8b] transition-colors hover:bg-[#f5f5f5] hover:text-[#525252]"
-                          aria-label={`Open ${row.department} in Team Scores`}
-                          title="Open in Team Scores"
+                        <button
+                          type="button"
+                          onClick={() => toggleHeatmapSort(header.key)}
+                          className={`items-center gap-1 transition-colors hover:text-[#525252] ${
+                            header.key === 'department' ? 'flex w-full min-w-0' : 'inline-flex'
+                          }`}
                         >
-                          <svg
-                            viewBox="0 0 16 16"
-                            fill="none"
-                            xmlns="http://www.w3.org/2000/svg"
-                            className="h-3.5 w-3.5"
-                            aria-hidden="true"
-                          >
-                            <path
-                              d="M6 3H3.75A1.75 1.75 0 0 0 2 4.75v7.5C2 13.216 2.784 14 3.75 14h7.5A1.75 1.75 0 0 0 13 12.25V10"
-                              stroke="currentColor"
-                              strokeWidth="1.5"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                            <path
-                              d="M9 3h4v4M13 3 7.5 8.5"
-                              stroke="currentColor"
-                              strokeWidth="1.5"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                          </svg>
-                        </Link>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-[#242424]">{formatScore(row.overall)}</td>
-                    <td className="px-4 py-3 text-sm text-[#242424]">{formatLevelLabel(row.level)}</td>
-                    {DIMENSION_KEYS.map((dimension) => (
-                      <td
-                        key={`${row.id}-${dimension}`}
-                        className="px-4 py-3 text-center text-sm text-[#242424]"
-                      >
-                        <span
-                          className={`inline-flex min-w-[3rem] items-center justify-center rounded-md px-2 py-1 font-medium ${lowScoreBadgeTone(row[dimension])}`}
-                        >
-                          {row[dimension].toFixed(1)}
-                        </span>
-                      </td>
+                          <span>{header.label}</span>
+                          <span className="inline-flex h-4 w-4 items-center justify-center text-[11px]">
+                            {isTableSortPending && heatmapSort.key === header.key ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              sortIndicator(header.key)
+                            )}
+                          </span>
+                        </button>
+                      </th>
                     ))}
-                    <td className="px-4 py-3 text-sm text-[#242424]">
-                      <span
-                        className={`inline-flex min-w-[3rem] items-center justify-center rounded-md px-2 py-1 font-medium ${
-                          row.respondents < 5
-                            ? 'bg-amber-100 text-amber-800'
-                            : ''
-                        }`}
-                      >
-                        {row.respondents}
-                      </span>
-                    </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {sortedDimensionHeatmap.length > 8 ? (
-            <div className="mt-4 flex justify-center">
-              <button
-                type="button"
-                onClick={() => setShowAllDimensionHeatmapRows((current) => !current)}
-                className="rounded-full border border-[#e5e7eb] bg-white px-4 py-2 text-sm font-medium text-[#525252] transition hover:bg-[#f8f8f8]"
-              >
-                {showAllDimensionHeatmapRows
-                  ? 'Show less'
-                  : `Show all (${sortedDimensionHeatmap.length})`}
-              </button>
-            </div>
-          ) : null}
-        </section>
-
-        <section className="mt-5 rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
-          <h3 className="text-lg font-semibold tracking-tight text-[#242424]">
-            Project ranking table
-          </h3>
-          <p className="mt-1 text-sm text-[#7a7a7a]">
-            Project-by-project view of current maturity so you can spot where stronger AI practice is already concentrated.
-          </p>
-
-          <div className="mt-5 overflow-x-auto">
-            <table className="w-full min-w-[1360px]">
-              <thead>
-                <tr className="border-b border-[#eaeaea] text-left text-xs text-[#8b8b8b]">
-                  {[
-                    { key: 'name' as const, label: 'Project' },
-                    { key: 'overall' as const, label: 'Overall' },
-                    { key: 'level' as const, label: 'Level' },
-                    ...DIMENSION_KEYS.map((dimension) => ({
-                      key: dimension,
-                      label: DIMENSION_LABELS[dimension],
-                    })),
-                    { key: 'respondents' as const, label: 'Responses' },
-                  ].map((header) => (
-                    <th key={header.key} className="px-4 py-3 font-medium">
-                      <button
-                        type="button"
-                        onClick={() => toggleProjectRankingSort(header.key)}
-                        className="inline-flex items-center gap-1 transition-colors hover:text-[#525252]"
-                      >
-                        <span>{header.label}</span>
-                        <span className="text-[11px]">{projectRankingSortIndicator(header.key)}</span>
-                      </button>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {visibleProjectRankingRows.map((project) => (
-                  <tr key={project.id} className="border-b border-[#eaeaea] last:border-b-0">
-                    <td className="px-4 py-3 font-medium text-[#242424]">
-                      <div className="flex items-center gap-3">
-                        <ProjectAvatar name={project.name} />
+                </thead>
+                <tbody>
+                  {visibleDimensionHeatmapRows.map((row) => (
+                    <tr key={row.id} className="border-b border-[#eaeaea] last:border-b-0">
+                      <td className="w-[200px] min-w-[200px] max-w-[200px] px-4 py-3 font-medium text-[#242424]">
                         <div className="flex min-w-0 items-center gap-2">
-                          <SensitiveText as="span" hidden={isSensitiveDataHidden} className="truncate">
-                            {project.name}
+                          <SensitiveText
+                            as="span"
+                            hidden={isSensitiveDataHidden}
+                            className="block flex-1 truncate"
+                          >
+                            {row.department}
                           </SensitiveText>
                           <Link
-                            to={`/teams?scope=team&scopeId=${project.id}`}
+                            to={`/teams?scope=department&scopeId=${row.id}`}
                             className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[#8b8b8b] transition-colors hover:bg-[#f5f5f5] hover:text-[#525252]"
                             aria-label={
                               isSensitiveDataHidden
-                                ? 'Open project in Team Scores'
-                                : `Open ${project.name} in Team Scores`
+                                ? 'Open department in Team Scores'
+                                : `Open ${row.department} in Team Scores`
                             }
                             title="Open in Team Scores"
                           >
@@ -6811,37 +7746,205 @@ export default function OrganizationView() {
                             </svg>
                           </Link>
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-[#242424]">{formatScore(project.overall)}</td>
-                    <td className="px-4 py-3 text-sm text-[#242424]">{formatLevelLabel(project.level)}</td>
-                    {DIMENSION_KEYS.map((dimension) => (
-                      <td
-                        key={`${project.id}-${dimension}`}
-                        className="px-4 py-3 text-center text-sm text-[#242424]"
-                      >
-                        <span
-                          className={`inline-flex min-w-[3rem] items-center justify-center rounded-md px-2 py-1 font-medium ${lowScoreBadgeTone(project.dimensions[dimension])}`}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-[#242424]">{formatScore(row.overall)}</td>
+                      <td className="px-4 py-3 text-sm text-[#242424]">{formatLevelLabel(row.level)}</td>
+                      <td className="w-[220px] min-w-[220px] max-w-[220px] px-4 py-3 text-sm text-[#242424]">
+                        <InfoTooltip>
+                          <TooltipTrigger asChild>
+                            <span className="inline-flex max-w-full items-center rounded-full border border-[#dbe6ff] bg-[#f5f8ff] px-3 py-1 text-xs font-semibold text-[#1d4ed8]">
+                              <span className="truncate">{row.archetype.label}</span>
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" sideOffset={8} className="max-w-[280px] px-3 py-2 text-[12px] leading-relaxed">
+                            <div className="font-medium text-white">{row.archetype.label}</div>
+                            <div className="mt-1 text-white/80">{row.archetype.signal}</div>
+                          </TooltipContent>
+                        </InfoTooltip>
+                      </td>
+                      {DIMENSION_KEYS.map((dimension) => (
+                        <td
+                          key={`${row.id}-${dimension}`}
+                          className="px-4 py-3 text-center text-sm text-[#242424]"
                         >
-                          {project.dimensions[dimension].toFixed(1)}
+                          <span
+                            className={`inline-flex min-w-[3rem] items-center justify-center rounded-md px-2 py-1 font-medium ${lowScoreBadgeTone(row[dimension])}`}
+                          >
+                            {row[dimension].toFixed(1)}
+                          </span>
+                        </td>
+                      ))}
+                      <td className="px-4 py-3 text-sm text-[#242424]">
+                        <span
+                          className={`inline-flex min-w-[3rem] items-center justify-center rounded-md px-2 py-1 font-medium ${
+                            row.respondents < 5
+                              ? 'bg-amber-100 text-amber-800'
+                              : ''
+                          }`}
+                        >
+                          {row.respondents}
                         </span>
                       </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {sortedDimensionHeatmap.length > 8 ? (
+            <div className="mt-4 flex justify-center">
+              <button
+                type="button"
+                onClick={() => setShowAllDimensionHeatmapRows((current) => !current)}
+                className="rounded-full border border-[#e5e7eb] bg-white px-4 py-2 text-sm font-medium text-[#525252] transition hover:bg-[#f8f8f8]"
+              >
+                {showAllDimensionHeatmapRows
+                  ? 'Show less'
+                  : `Show all (${sortedDimensionHeatmap.length})`}
+              </button>
+            </div>
+          ) : null}
+        </section>
+
+        <section className="mt-5 rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
+          <h3 className="text-lg font-semibold tracking-tight text-[#242424]">
+            Project ranking table
+          </h3>
+          <p className="mt-1 text-sm text-[#7a7a7a]">
+            Project-by-project view of current maturity so you can spot where stronger AI practice is already concentrated.
+          </p>
+
+          <div className="mt-5 grid gap-5 xl:grid-cols-[360px_minmax(0,1fr)]">
+            <ProjectArchetypeBubbleChart
+              rows={projectArchetypeBubbleRows}
+              scopeLabel="Project"
+              scopeLabelPlural="Projects"
+            />
+
+            <div className="min-w-0 overflow-x-auto">
+              <table className="w-full min-w-[1540px]">
+                <thead>
+                  <tr className="border-b border-[#eaeaea] text-left text-xs text-[#8b8b8b]">
+                    {[
+                      { key: 'name' as const, label: 'Project' },
+                      { key: 'overall' as const, label: 'Overall' },
+                      { key: 'level' as const, label: 'Level' },
+                      { key: 'archetype' as const, label: 'Archetype' },
+                      ...DIMENSION_KEYS.map((dimension) => ({
+                        key: dimension,
+                        label: DIMENSION_LABELS[dimension],
+                      })),
+                      { key: 'respondents' as const, label: 'Responses' },
+                    ].map((header) => (
+                      <th key={header.key} className="px-4 py-3 font-medium">
+                        <button
+                          type="button"
+                          onClick={() => toggleProjectRankingSort(header.key)}
+                          className="inline-flex items-center gap-1 transition-colors hover:text-[#525252]"
+                        >
+                          <span>{header.label}</span>
+                          <span className="inline-flex h-4 w-4 items-center justify-center text-[11px]">
+                            {isTableSortPending && projectRankingSort.key === header.key ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              projectRankingSortIndicator(header.key)
+                            )}
+                          </span>
+                        </button>
+                      </th>
                     ))}
-                    <td className="px-4 py-3 text-sm text-[#242424]">
-                      <span
-                        className={`inline-flex min-w-[3rem] items-center justify-center rounded-md px-2 py-1 font-medium ${
-                          project.respondents < 5
-                            ? 'bg-amber-100 text-amber-800'
-                            : ''
-                        }`}
-                      >
-                        {project.respondents}
-                      </span>
-                    </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {visibleProjectRankingRows.map((project) => (
+                    <tr key={project.id} className="border-b border-[#eaeaea] last:border-b-0">
+                      <td className="px-4 py-3 font-medium text-[#242424]">
+                        <div className="flex items-center gap-3">
+                          <ProjectAvatar name={project.name} />
+                          <div className="flex min-w-0 items-center gap-2">
+                            <SensitiveText as="span" hidden={isSensitiveDataHidden} className="truncate">
+                              {project.name}
+                            </SensitiveText>
+                            <Link
+                              to={`/teams?scope=team&scopeId=${project.id}`}
+                              className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[#8b8b8b] transition-colors hover:bg-[#f5f5f5] hover:text-[#525252]"
+                              aria-label={
+                                isSensitiveDataHidden
+                                  ? 'Open project in Team Scores'
+                                  : `Open ${project.name} in Team Scores`
+                              }
+                              title="Open in Team Scores"
+                            >
+                              <svg
+                                viewBox="0 0 16 16"
+                                fill="none"
+                                xmlns="http://www.w3.org/2000/svg"
+                                className="h-3.5 w-3.5"
+                                aria-hidden="true"
+                              >
+                                <path
+                                  d="M6 3H3.75A1.75 1.75 0 0 0 2 4.75v7.5C2 13.216 2.784 14 3.75 14h7.5A1.75 1.75 0 0 0 13 12.25V10"
+                                  stroke="currentColor"
+                                  strokeWidth="1.5"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                />
+                                <path
+                                  d="M9 3h4v4M13 3 7.5 8.5"
+                                  stroke="currentColor"
+                                  strokeWidth="1.5"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                />
+                              </svg>
+                            </Link>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-[#242424]">{formatScore(project.overall)}</td>
+                      <td className="px-4 py-3 text-sm text-[#242424]">{formatLevelLabel(project.level)}</td>
+                      <td className="w-[220px] min-w-[220px] max-w-[220px] px-4 py-3 text-sm text-[#242424]">
+                        <InfoTooltip>
+                          <TooltipTrigger asChild>
+                            <span className="inline-flex max-w-full items-center rounded-full border border-[#dbe6ff] bg-[#f5f8ff] px-3 py-1 text-xs font-semibold text-[#1d4ed8]">
+                              <span className="truncate">{project.archetype.label}</span>
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" sideOffset={8} className="max-w-[280px] px-3 py-2 text-[12px] leading-relaxed">
+                            <div className="font-medium text-white">{project.archetype.label}</div>
+                            <div className="mt-1 text-white/80">{project.archetype.signal}</div>
+                          </TooltipContent>
+                        </InfoTooltip>
+                      </td>
+                      {DIMENSION_KEYS.map((dimension) => (
+                        <td
+                          key={`${project.id}-${dimension}`}
+                          className="px-4 py-3 text-center text-sm text-[#242424]"
+                        >
+                          <span
+                            className={`inline-flex min-w-[3rem] items-center justify-center rounded-md px-2 py-1 font-medium ${lowScoreBadgeTone(project.dimensions[dimension])}`}
+                          >
+                            {project.dimensions[dimension].toFixed(1)}
+                          </span>
+                        </td>
+                      ))}
+                      <td className="px-4 py-3 text-sm text-[#242424]">
+                        <span
+                          className={`inline-flex min-w-[3rem] items-center justify-center rounded-md px-2 py-1 font-medium ${
+                            project.respondents < 5
+                              ? 'bg-amber-100 text-amber-800'
+                              : ''
+                          }`}
+                        >
+                          {project.respondents}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
 
           {sortedProjectRankingRows.length > 10 ? (
@@ -6861,6 +7964,8 @@ export default function OrganizationView() {
 
       </section>
 
+      {!isMustKnowMode ? (
+        <>
       <section id="org-dimension-usage" className="mt-8 scroll-mt-24">
         <SectionHeader
           title="Dimension 1: Usage"
@@ -6868,7 +7973,8 @@ export default function OrganizationView() {
         />
 
         <div className="grid gap-5 xl:grid-cols-2">
-          <section className="rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
+          <section className="group relative rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
+            <ChartFeedback chartTitle="Business workflows using AI" page="organization" />
             <h3 className="text-lg font-semibold tracking-tight text-[#242424]">
               Business workflows using AI
             </h3>
@@ -6931,7 +8037,8 @@ export default function OrganizationView() {
             </div>
           </section>
 
-          <section className="rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
+          <section className="group relative rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
+            <ChartFeedback chartTitle="Delivery & engineering activities using AI" page="organization" />
             <h3 className="text-lg font-semibold tracking-tight text-[#242424]">
               Delivery & engineering activities using AI
             </h3>
@@ -6995,7 +8102,8 @@ export default function OrganizationView() {
           </section>
         </div>
 
-        <section className="mt-5 rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
+        <section className="group relative mt-5 rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
+          <ChartFeedback chartTitle="AI embeddedness in actual work" page="organization" />
           <h3 className="text-lg font-semibold tracking-tight text-[#242424]">
             AI embeddedness in actual work
           </h3>
@@ -7050,7 +8158,9 @@ export default function OrganizationView() {
                       className="inline-flex items-center gap-1.5 rounded-full border border-[#e5e7eb] bg-[#f4f4f5] py-1 pl-2.5 pr-1 text-xs font-medium text-[#242424]"
                     >
                       <span className="text-[#6b7280]">Department</span>
-                      <span>{department}</span>
+                      <SensitiveText as="span" hidden={isSensitiveDataHidden}>
+                        {department}
+                      </SensitiveText>
                       <button
                         type="button"
                         onClick={() =>
@@ -7059,7 +8169,11 @@ export default function OrganizationView() {
                           )
                         }
                         className="rounded-full p-1 text-[#8b8b8b] transition hover:bg-white hover:text-[#242424]"
-                        aria-label={`Remove department filter ${department}`}
+                        aria-label={
+                          isSensitiveDataHidden
+                            ? 'Remove department filter'
+                            : `Remove department filter ${department}`
+                        }
                       >
                         <X className="h-3 w-3" />
                       </button>
@@ -7150,7 +8264,8 @@ export default function OrganizationView() {
           </div>
         </section>
 
-        <section className="mt-5 rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
+        <section className="group relative mt-5 rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
+          <ChartFeedback chartTitle="Shared AI practices on teams" page="organization" />
           <h3 className="text-lg font-semibold tracking-tight text-[#242424]">
             Shared AI practices on teams
           </h3>
@@ -7205,7 +8320,9 @@ export default function OrganizationView() {
                       className="inline-flex items-center gap-1.5 rounded-full border border-[#e5e7eb] bg-[#f4f4f5] py-1 pl-2.5 pr-1 text-xs font-medium text-[#242424]"
                     >
                       <span className="text-[#6b7280]">Department</span>
-                      <span>{department}</span>
+                      <SensitiveText as="span" hidden={isSensitiveDataHidden}>
+                        {department}
+                      </SensitiveText>
                       <button
                         type="button"
                         onClick={() =>
@@ -7214,7 +8331,11 @@ export default function OrganizationView() {
                           )
                         }
                         className="rounded-full p-1 text-[#8b8b8b] transition hover:bg-white hover:text-[#242424]"
-                        aria-label={`Remove department filter ${department}`}
+                        aria-label={
+                          isSensitiveDataHidden
+                            ? 'Remove department filter'
+                            : `Remove department filter ${department}`
+                        }
                       >
                         <X className="h-3 w-3" />
                       </button>
@@ -7312,7 +8433,8 @@ export default function OrganizationView() {
           subtitle="See how strong people’s AI understanding is today, using the baseline skills questions from each survey."
         />
 
-        <section className="rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
+        <section className="group relative rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
+          <ChartFeedback chartTitle="Baseline AI understanding" page="organization" />
           <h3 className="text-lg font-semibold tracking-tight text-[#242424]">
             Baseline AI understanding
           </h3>
@@ -7367,7 +8489,9 @@ export default function OrganizationView() {
                       className="inline-flex items-center gap-1.5 rounded-full border border-[#e5e7eb] bg-[#f4f4f5] py-1 pl-2.5 pr-1 text-xs font-medium text-[#242424]"
                     >
                       <span className="text-[#6b7280]">Department</span>
-                      <span>{department}</span>
+                      <SensitiveText as="span" hidden={isSensitiveDataHidden}>
+                        {department}
+                      </SensitiveText>
                       <button
                         type="button"
                         onClick={() =>
@@ -7376,7 +8500,11 @@ export default function OrganizationView() {
                           )
                         }
                         className="rounded-full p-1 text-[#8b8b8b] transition hover:bg-white hover:text-[#242424]"
-                        aria-label={`Remove department filter ${department}`}
+                        aria-label={
+                          isSensitiveDataHidden
+                            ? 'Remove department filter'
+                            : `Remove department filter ${department}`
+                        }
                       >
                         <X className="h-3 w-3" />
                       </button>
@@ -7468,7 +8596,8 @@ export default function OrganizationView() {
         </section>
 
         <div className="mt-5 grid gap-5 xl:grid-cols-2">
-          <section className="rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
+          <section className="group relative rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
+            <ChartFeedback chartTitle="Most-used AI tools" page="organization" />
             <h3 className="text-lg font-semibold tracking-tight text-[#242424]">
               Most-used AI tools
             </h3>
@@ -7535,7 +8664,9 @@ export default function OrganizationView() {
                         className="inline-flex items-center gap-1.5 rounded-full border border-[#e5e7eb] bg-[#f4f4f5] py-1 pl-2.5 pr-1 text-xs font-medium text-[#242424]"
                       >
                         <span className="text-[#6b7280]">Department</span>
-                        <span>{department}</span>
+                        <SensitiveText as="span" hidden={isSensitiveDataHidden}>
+                          {department}
+                        </SensitiveText>
                         <button
                           type="button"
                           onClick={() =>
@@ -7544,7 +8675,11 @@ export default function OrganizationView() {
                             )
                           }
                           className="rounded-full p-1 text-[#8b8b8b] transition hover:bg-white hover:text-[#242424]"
-                          aria-label={`Remove department filter ${department}`}
+                          aria-label={
+                            isSensitiveDataHidden
+                              ? 'Remove department filter'
+                              : `Remove department filter ${department}`
+                          }
                         >
                           <X className="h-3 w-3" />
                         </button>
@@ -7630,9 +8765,30 @@ export default function OrganizationView() {
                 </BarChart>
               </ResponsiveContainer>
             </div>
+
+            <div className="mt-6 rounded-2xl border border-[#e5e7eb] bg-[#fafafa] p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h4 className="text-sm font-semibold text-[#242424]">Tool mentions cloud</h4>
+                  <p className="mt-1 text-xs text-[#737373]">
+                    Combines predefined options with cleaned free-text mentions from the same
+                    responses.
+                  </p>
+                </div>
+                <div className="rounded-full border border-[#e5e7eb] bg-[#f5f5f5] px-3 py-1 text-xs font-medium text-[#525252]">
+                  {toolMentionCloud.length} distinct mentions
+                </div>
+              </div>
+              <MentionCloud
+                entries={toolMentionCloud}
+                accent="teal"
+                emptyLabel="No tool mentions found for the current filter."
+              />
+            </div>
           </section>
 
-          <section className="rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
+          <section className="group relative rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
+            <ChartFeedback chartTitle="Most-used LLM models" page="organization" />
             <h3 className="text-lg font-semibold tracking-tight text-[#242424]">
               Most-used LLM models
             </h3>
@@ -7699,7 +8855,9 @@ export default function OrganizationView() {
                         className="inline-flex items-center gap-1.5 rounded-full border border-[#e5e7eb] bg-[#f4f4f5] py-1 pl-2.5 pr-1 text-xs font-medium text-[#242424]"
                       >
                         <span className="text-[#6b7280]">Department</span>
-                        <span>{department}</span>
+                        <SensitiveText as="span" hidden={isSensitiveDataHidden}>
+                          {department}
+                        </SensitiveText>
                         <button
                           type="button"
                           onClick={() =>
@@ -7708,7 +8866,11 @@ export default function OrganizationView() {
                             )
                           }
                           className="rounded-full p-1 text-[#8b8b8b] transition hover:bg-white hover:text-[#242424]"
-                          aria-label={`Remove department filter ${department}`}
+                          aria-label={
+                            isSensitiveDataHidden
+                              ? 'Remove department filter'
+                              : `Remove department filter ${department}`
+                          }
                         >
                           <X className="h-3 w-3" />
                         </button>
@@ -7794,10 +8956,31 @@ export default function OrganizationView() {
                 </BarChart>
               </ResponsiveContainer>
             </div>
+
+            <div className="mt-6 rounded-2xl border border-[#e5e7eb] bg-[#fafafa] p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h4 className="text-sm font-semibold text-[#242424]">Model mentions cloud</h4>
+                  <p className="mt-1 text-xs text-[#737373]">
+                    Combines predefined options with cleaned free-text mentions from the same
+                    responses.
+                  </p>
+                </div>
+                <div className="rounded-full border border-[#e5e7eb] bg-[#f5f5f5] px-3 py-1 text-xs font-medium text-[#525252]">
+                  {modelMentionCloud.length} distinct mentions
+                </div>
+              </div>
+              <MentionCloud
+                entries={modelMentionCloud}
+                accent="blue"
+                emptyLabel="No model mentions found for the current filter."
+              />
+            </div>
           </section>
         </div>
 
-        <section className="mt-5 rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
+        <section className="group relative mt-5 rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
+          <ChartFeedback chartTitle="Prompting techniques used in practice" page="organization" />
           <h3 className="text-lg font-semibold tracking-tight text-[#242424]">
             Prompting techniques used in practice
           </h3>
@@ -7852,7 +9035,9 @@ export default function OrganizationView() {
                       className="inline-flex items-center gap-1.5 rounded-full border border-[#e5e7eb] bg-[#f4f4f5] py-1 pl-2.5 pr-1 text-xs font-medium text-[#242424]"
                     >
                       <span className="text-[#6b7280]">Department</span>
-                      <span>{department}</span>
+                      <SensitiveText as="span" hidden={isSensitiveDataHidden}>
+                        {department}
+                      </SensitiveText>
                       <button
                         type="button"
                         onClick={() =>
@@ -7861,7 +9046,11 @@ export default function OrganizationView() {
                           )
                         }
                         className="rounded-full p-1 text-[#8b8b8b] transition hover:bg-white hover:text-[#242424]"
-                        aria-label={`Remove department filter ${department}`}
+                        aria-label={
+                          isSensitiveDataHidden
+                            ? 'Remove department filter'
+                            : `Remove department filter ${department}`
+                        }
                       >
                         <X className="h-3 w-3" />
                       </button>
@@ -7955,7 +9144,8 @@ export default function OrganizationView() {
           </div>
         </section>
 
-        <section className="mt-5 rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
+        <section className="group relative mt-5 rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
+          <ChartFeedback chartTitle="Sensitive data handling with AI" page="organization" />
           <h3 className="text-lg font-semibold tracking-tight text-[#242424]">
             Sensitive data handling with AI
           </h3>
@@ -8010,7 +9200,9 @@ export default function OrganizationView() {
                       className="inline-flex items-center gap-1.5 rounded-full border border-[#e5e7eb] bg-[#f4f4f5] py-1 pl-2.5 pr-1 text-xs font-medium text-[#242424]"
                     >
                       <span className="text-[#6b7280]">Department</span>
-                      <span>{department}</span>
+                      <SensitiveText as="span" hidden={isSensitiveDataHidden}>
+                        {department}
+                      </SensitiveText>
                       <button
                         type="button"
                         onClick={() =>
@@ -8019,7 +9211,11 @@ export default function OrganizationView() {
                           )
                         }
                         className="rounded-full p-1 text-[#8b8b8b] transition hover:bg-white hover:text-[#242424]"
-                        aria-label={`Remove department filter ${department}`}
+                        aria-label={
+                          isSensitiveDataHidden
+                            ? 'Remove department filter'
+                            : `Remove department filter ${department}`
+                        }
                       >
                         <X className="h-3 w-3" />
                       </button>
@@ -8110,88 +9306,204 @@ export default function OrganizationView() {
           </div>
         </section>
       </section>
+        </>
+      ) : null}
 
-      <OrganizationDimensionImpactSection {...impactSectionProps} />
+      {isMustKnowMode ? (
+        <>
+          <section id="org-where-gaps" className="mt-8 scroll-mt-24">
+            <SectionHeader
+              title="Usage vs Impact quadrant"
+              subtitle="A quick read on whether AI usage is already translating into meaningful outcomes across departments and teams."
+            />
 
-      <OrganizationDimensionCultureSection {...cultureSectionProps} />
+            <UsageImpactQuadrantCard
+              scope={usageImpactScope}
+              onScopeChange={setUsageImpactScope}
+              summary={usageImpactQuadrantSummary}
+              data={usageImpactQuadrant}
+            />
+          </section>
 
-      <OrganizationDimensionVisionSection {...visionSectionProps} />
+          <section id="org-top-deviating" className="mt-8 scroll-mt-24">
+            <SectionHeader
+              title="Top deviating people"
+              subtitle="Focus on the individuals who differ most from the organization pattern and may need support, follow-up, or closer review."
+            />
 
-      <section id="org-where-gaps" className="mt-8 scroll-mt-24">
-        <SectionHeader
-          title="Where are the gaps?"
-          subtitle="Spot where AI usage outruns value, where practices remain fragile, and where teams need enablement, structure, or safer operating habits."
-        />
+            <TopDeviatingPeopleCard rows={deviatingPeopleRows} />
+          </section>
 
-        <div className="space-y-5">
-          <UsageImpactQuadrantCard
-            scope={usageImpactScope}
-            onScopeChange={setUsageImpactScope}
-            summary={usageImpactQuadrantSummary}
-            data={usageImpactQuadrant}
-          />
+          <section id="org-where-invest" className="mt-8 scroll-mt-24">
+            <SectionHeader
+              title="Suggested goals for the organization"
+              subtitle="The most important next actions, ranked from organization-wide maturity scores, champion coverage, and the strongest friction signals."
+            />
 
-          <div className="grid gap-5 xl:grid-cols-2">
-            <SkillsConfidenceGapCard
-              departmentRows={gapSkillsConfidenceDepartmentRows}
-            />
-            <ToolAccessConstraintMapCard
-              departmentRows={gapToolAccessDepartmentRows}
-              teamRows={gapToolAccessTeamRows}
-            />
-            <EmbeddednessSharedPracticesGapCard
-              departmentRows={gapEmbeddednessDepartmentRows}
-              teamRows={gapEmbeddednessTeamRows}
-            />
-            <ImpactWithoutResilienceCard
-              departmentRows={gapImpactWithoutResilienceDepartmentRows}
-              teamRows={gapImpactWithoutResilienceTeamRows}
-            />
-            <SupportDemandSkillsGapCard
-              departmentRows={gapSupportDemandDepartmentRows}
-              teamRows={gapSupportDemandTeamRows}
-            />
-            <SensitiveDataRiskPocketsCard
-              departmentRows={gapSensitiveDataDepartmentRows}
-              teamRows={gapSensitiveDataTeamRows}
-            />
-            <WorkflowTransformationGapCard
-              departmentRows={gapWorkflowTransformationDepartmentRows}
-              teamRows={gapWorkflowTransformationTeamRows}
-            />
-            <VisionToActionGapCard
-              departmentRows={gapVisionToActionDepartmentRows}
-              teamRows={gapVisionToActionTeamRows}
-            />
-            <CultureSpreadGapCard
-              departmentRows={gapCultureSpreadDepartmentRows}
-              teamRows={gapCultureSpreadTeamRows}
-            />
-          </div>
-        </div>
-      </section>
+            {organizationSuggestedGoals.length > 0 ? (
+              <div className="grid gap-4 xl:grid-cols-3">
+                {organizationSuggestedGoals.map((goal) => (
+                  <SuggestedGoalCard key={goal.id} goal={goal} />
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-dashed border-[#d4d4d8] bg-[#fafafa] px-6 py-8 text-center text-sm text-[#7a7a7a]">
+                No organization-level suggested goals are available yet.
+              </div>
+            )}
+          </section>
+        </>
+      ) : (
+        <>
+          <OrganizationDimensionImpactSection {...impactSectionProps} />
 
-      <section id="org-where-invest" className="mt-8 scroll-mt-24">
-        <SectionHeader
-          title="Where should we invest?"
-          subtitle="Translate survey outcomes into enablement priorities: role-specific training, licensing, and deeper workflow integration."
-        />
+          <OrganizationDimensionCultureSection {...cultureSectionProps} />
 
-        <div className="grid gap-5 xl:grid-cols-2">
-          <SupportDemandSkillsGapCard
-            departmentRows={gapSupportDemandDepartmentRows}
-            teamRows={gapSupportDemandTeamRows}
-          />
-          <ToolAccessConstraintMapCard
-            departmentRows={gapToolAccessDepartmentRows}
-            teamRows={gapToolAccessTeamRows}
-          />
-          <RiskGovernanceHotspotsCard
-            departmentRows={investmentRiskGovernanceDepartmentRows}
-            teamRows={investmentRiskGovernanceTeamRows}
-          />
-        </div>
-      </section>
+          <OrganizationDimensionVisionSection {...visionSectionProps} />
+
+          <section id="org-where-gaps" className="mt-8 scroll-mt-24">
+            <SectionHeader
+              title="Where are the gaps?"
+              subtitle="Spot where AI usage outruns value, where practices remain fragile, and where teams need enablement, structure, or safer operating habits."
+            />
+
+            <div className="space-y-5">
+              <UsageImpactQuadrantCard
+                scope={usageImpactScope}
+                onScopeChange={setUsageImpactScope}
+                summary={usageImpactQuadrantSummary}
+                data={usageImpactQuadrant}
+              />
+
+              <TopDeviatingPeopleCard rows={deviatingPeopleRows} />
+
+              <div className="grid gap-5 xl:grid-cols-2">
+                <ResistanceReasonsCard
+                  data={blockerComparison}
+                  businessColor={IMPACT_COHORT_COLORS.business}
+                  deliveryColor={IMPACT_COHORT_COLORS.delivery}
+                />
+                <ResistanceByScopeCard
+                  departmentRows={gapResistanceDepartmentRows}
+                  teamRows={gapResistanceTeamRows}
+                />
+                <section className="group relative rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
+                  <ChartFeedback chartTitle="Words used in blocker answers" page="organization" />
+                  <h3 className="text-lg font-semibold tracking-tight text-[#242424]">
+                    Words used in blocker answers
+                  </h3>
+                  <p className="mt-1 text-sm text-[#7a7a7a]">
+                    Literal words from the open-text answers to “What is the biggest thing stopping you
+                    from using AI more in your work?”
+                  </p>
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                    <div className="text-sm text-[#8b8b8b]">
+                      {blockerOpenTextResponses.length} responses with blocker text
+                    </div>
+                    <div className="rounded-full border border-[#e5e7eb] bg-[#f5f5f5] px-3 py-1 text-xs font-medium text-[#525252]">
+                      {blockerWordCloud.length} distinct words
+                    </div>
+                  </div>
+                  <div className="mt-4 rounded-2xl border border-[#e5e7eb] bg-[#fafafa] p-4">
+                    <MentionCloud
+                      entries={blockerWordCloud}
+                      accent="blue"
+                      emptyLabel="No blocker words are available in the current view."
+                    />
+                  </div>
+                </section>
+                <SkillsConfidenceGapCard
+                  departmentRows={gapSkillsConfidenceDepartmentRows}
+                />
+                <EmbeddednessSharedPracticesGapCard
+                  departmentRows={gapEmbeddednessDepartmentRows}
+                  teamRows={gapEmbeddednessTeamRows}
+                />
+                <ImpactWithoutResilienceCard
+                  departmentRows={gapImpactWithoutResilienceDepartmentRows}
+                  teamRows={gapImpactWithoutResilienceTeamRows}
+                />
+                <SupportDemandSkillsGapCard
+                  departmentRows={gapSupportDemandDepartmentRows}
+                  teamRows={gapSupportDemandTeamRows}
+                />
+                <SensitiveDataRiskPocketsCard
+                  departmentRows={gapSensitiveDataDepartmentRows}
+                  teamRows={gapSensitiveDataTeamRows}
+                />
+                <WorkflowTransformationGapCard
+                  departmentRows={gapWorkflowTransformationDepartmentRows}
+                  teamRows={gapWorkflowTransformationTeamRows}
+                />
+                <VisionToActionGapCard
+                  departmentRows={gapVisionToActionDepartmentRows}
+                  teamRows={gapVisionToActionTeamRows}
+                />
+                <CultureSpreadGapCard
+                  departmentRows={gapCultureSpreadDepartmentRows}
+                  teamRows={gapCultureSpreadTeamRows}
+                />
+                <MaturityVisibilityGapCard
+                  departmentRows={gapMaturityVisibilityDepartmentRows}
+                  teamRows={gapMaturityVisibilityTeamRows}
+                />
+              </div>
+            </div>
+          </section>
+
+          <section id="org-where-invest" className="mt-8 scroll-mt-24">
+            <SectionHeader
+              title="Where should we invest?"
+              subtitle="Translate survey outcomes into enablement priorities: role-specific training, licensing, and deeper workflow integration."
+            />
+
+            <div className="grid gap-5 xl:grid-cols-2">
+              <SupportDemandSkillsGapCard
+                departmentRows={gapSupportDemandDepartmentRows}
+                teamRows={gapSupportDemandTeamRows}
+              />
+              <ToolAccessConstraintMapCard
+                departmentRows={gapToolAccessDepartmentRows}
+                teamRows={gapToolAccessTeamRows}
+              />
+              <RiskGovernanceHotspotsCard
+                departmentRows={investmentRiskGovernanceDepartmentRows}
+                teamRows={investmentRiskGovernanceTeamRows}
+              />
+            </div>
+
+            {organizationSuggestedGoals.length > 0 ? (
+              <div className="mt-6">
+                <div className="mb-4">
+                  <h3 className="text-lg font-semibold tracking-tight text-[#242424]">
+                    Suggested goals for the organization
+                  </h3>
+                  <p className="mt-1 text-sm text-[#7a7a7a]">
+                    Ranked from organization-wide maturity scores, champion coverage, and the strongest friction signals across departments.
+                  </p>
+                </div>
+
+                <div className="grid gap-4 xl:grid-cols-3">
+                  {organizationSuggestedGoals.map((goal) => (
+                    <SuggestedGoalCard key={goal.id} goal={goal} />
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </section>
+        </>
+      )}
+
+      <AskAiSidebar
+        isOpen={isAskAiOpen}
+        onClose={() => setIsAskAiOpen(false)}
+        scopeType="organization"
+        scopeLabel="Organization AI analysis"
+        scopeDescription="Ask follow-up questions about maturity patterns, benchmarks, hotspots, and where to invest next across the organization."
+        threadKey="organization"
+        buildResearchPack={getAiResearchPack}
+        starterQuestions={askAiStarterQuestions}
+      />
 
     </div>
   );

@@ -6,8 +6,9 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { deriveIndividualsFromResponses } from '../individuals';
-import { deriveOrgAverageScores } from '../projects';
+import { SURVEY_DEFINITIONS, type SurveyDefinition } from '../../shared/survey-domain';
+import { deriveIndividualsFromResponses } from '../deriveIndividuals';
+import { deriveOrgAverageScores } from '../deriveOrgAverageScores';
 import type { Individual, TechDimension } from '../types';
 import {
   allDepartmentsList,
@@ -36,6 +37,7 @@ type SurveyCsvOverrides = Partial<Record<string, string>>;
 type PersonNameOverrides = Record<string, string>;
 
 interface SurveyDataContextValue {
+  surveyDefinitions: SurveyDefinition[];
   rawSurveyDatasets: RawSurveyDataset[];
   rawResponses: RawResponse[];
   individuals: Individual[];
@@ -234,6 +236,7 @@ export function SurveyDataProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<SurveyDataContextValue>(
     () => ({
+      surveyDefinitions: SURVEY_DEFINITIONS,
       rawSurveyDatasets,
       rawResponses,
       individuals,

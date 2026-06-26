@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
+
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
   X,
   ChevronDown,
+  Loader2,
 } from 'lucide-react';
+import AskAiSidebar, { AskAiTriggerButton } from '../components/ai/AskAiSidebar';
 import {
   Radar,
   RadarChart,
@@ -17,6 +20,7 @@ import {
   Tooltip as RechartsTooltip,
   Legend,
 } from '../components/charts/recharts';
+import SuggestedGoalCard from '../components/goals/SuggestedGoalCard';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../components/ui/tooltip';
 import { useSensitiveData } from '../components/privacy/SensitiveDataContext';
 import PersonAvatar from '../components/ui/PersonAvatar';
@@ -31,14 +35,24 @@ import PageHeader from '../components/layout/PageHeader';
 import FloatingSectionNav from '../components/layout/FloatingSectionNav';
 import { useNavigationPending } from '../components/layout/NavigationPendingContext';
 import { useSurveyData } from '../data/survey/SurveyDataContext';
+import {
+  resolveIndividualArchetype,
+  type IndividualArchetypeProfile,
+} from '../data/survey/individualArchetypes';
+import { buildIndividualSuggestedGoals } from '../data/survey/goals';
 import { getQuestionsForSurveyType, type QuestionMeta } from '../data/survey/questions';
 import { computeScores } from '../data/survey/scoring';
+import { useTableSortPending } from '../hooks/useTableSortPending';
+import {
+  buildTeamValidatedView,
+  type TeamValidatedSignal,
+} from '../data/survey/teamValidatedView';
 import type { Individual, TechDimension } from '../data/types';
 import { TECH_DIMENSIONS, LEVEL_LABELS, scoreToLevel } from '../data/types';
 import { MAX_DIMENSION_SCORE } from '../data/types';
 
 type PersonMapDimension = TechDimension;
-type SortKey = 'name' | 'level' | PersonMapDimension | 'updated';
+type SortKey = 'name' | 'level' | 'archetype' | PersonMapDimension | 'updated';
 type SortDir = 'asc' | 'desc';
 type PersonMapSeriesKey = 'person' | 'roleAverage' | 'teamAverage';
 
@@ -126,20 +140,20 @@ function PersonNameText({
   hideSurname?: boolean;
   className?: string;
 }) {
+  if (hideSurname) {
+    return (
+      <SensitiveText as="div" hidden className={className}>
+        {name || 'Unknown'}
+      </SensitiveText>
+    );
+  }
+
   const { firstName, remainder } = splitNameParts(name);
 
   return (
     <div title={hideSurname ? undefined : name} className={className}>
       <span>{firstName || 'Unknown'}</span>
-      {remainder ? (
-        hideSurname ? (
-          <SensitiveText as="span" hidden className="inline-block">
-            {remainder}
-          </SensitiveText>
-        ) : (
-          <span>{remainder}</span>
-        )
-      ) : null}
+      {remainder ? <span>{remainder}</span> : null}
     </div>
   );
 }
@@ -184,17 +198,52 @@ function formatSignedDelta(value: number): string {
   return `${value >= 0 ? '+' : ''}${value.toFixed(1)}`;
 }
 
+function alignmentGapSummary(gap: number | null): string {
+  if (gap === null) return 'Not enough data yet';
+  if (gap >= 0.8) return 'Self-rating is running well above team reality';
+  if (gap >= 0.4) return 'Self-rating is somewhat above team reality';
+  if (gap <= -0.8) return 'Team signal is stronger than the self-rating';
+  if (gap <= -0.4) return 'Team signal is slightly stronger than the self-rating';
+  return 'Self-rating and team signal are broadly aligned';
+}
+
+function proxyAvailabilityNote(peerRespondentCount: number, teamClimateScore: number | null): string {
+  if (peerRespondentCount === 0) {
+    return 'No team-peer responses were found, so this proxy is currently driven only by the respondent’s own spread-of-practice signals.';
+  }
+
+  if (teamClimateScore === null) {
+    return 'Team-peer responses exist, but not enough team-climate answers were available to validate the surrounding environment yet.';
+  }
+
+  return 'This is a proxy built from existing survey signals, not direct peer ratings.';
+}
+
+function scoreTrackClass(score: number | null): string {
+  if (score === null) return 'bg-[#e5e7eb]';
+  if (score >= 4) return 'bg-[#0f766e]';
+  if (score >= 3) return 'bg-[#2563eb]';
+  if (score >= 2) return 'bg-[#d97706]';
+  return 'bg-[#dc2626]';
+}
+
+function formatScoreValue(score: number | null): string {
+  return score === null ? 'N/A' : `${score.toFixed(1)} / 5`;
+}
+
 function SortHeader({
   label,
   sortKey,
   currentKey,
   currentDir,
+  isPending,
   onSort,
 }: {
   label: string;
   sortKey: SortKey;
   currentKey: SortKey | null;
   currentDir: SortDir;
+  isPending: boolean;
   onSort: (key: SortKey) => void;
 }) {
   const isActive = currentKey === sortKey;
@@ -205,7 +254,9 @@ function SortHeader({
         className="inline-flex items-center gap-1 hover:text-[#242424] transition-colors"
       >
         {label}
-        {isActive ? (
+        {isPending && isActive ? (
+          <Loader2 className="h-3 w-3 animate-spin" />
+        ) : isActive ? (
           currentDir === 'asc' ? (
             <ArrowUp className="h-3 w-3" />
           ) : (
@@ -300,7 +351,41 @@ function QuestionScoreBadge({ score }: { score: number | 'SKIP' | undefined }) {
   );
 }
 
-export default function IndividualView() {
+function TeamValidatedSignalRow({ signal }: { signal: TeamValidatedSignal }) {
+  const width =
+    typeof signal.score === 'number'
+      ? `${Math.max(0, Math.min(100, (signal.score / MAX_DIMENSION_SCORE) * 100))}%`
+      : '0%';
+  const responseLabel =
+    typeof signal.score === 'number'
+      ? signal.respondentCount === 1
+        ? '1 response'
+        : `${signal.respondentCount} responses`
+      : 'No usable answer';
+
+  return (
+    <div className="rounded-2xl border border-[#e5e7eb] bg-white p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-sm font-medium text-[#242424]">{signal.label}</div>
+          <div className="mt-1 text-xs leading-5 text-[#6b7280]">{signal.description}</div>
+        </div>
+        <div className="shrink-0 text-right">
+          <div className="text-sm font-semibold text-[#242424]">{formatScoreValue(signal.score)}</div>
+          <div className="mt-1 text-[11px] text-[#8b8b8b]">{responseLabel}</div>
+        </div>
+      </div>
+      <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#eef2f7]">
+        <div
+          className={`h-full rounded-full transition-[width] ${scoreTrackClass(signal.score)}`}
+          style={{ width }}
+        />
+      </div>
+    </div>
+  );
+}
+
+export default function PeopleView() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { individuals, orgAvgScores, rawResponses } = useSurveyData();
   const { isSensitiveDataHidden } = useSensitiveData();
@@ -314,10 +399,14 @@ export default function IndividualView() {
     searchParams.getAll('department'),
   );
   const [breakdownOpen, setBreakdownOpen] = useState(false);
+  const [goalsOpen, setGoalsOpen] = useState(false);
+  const [teamValidatedOpen, setTeamValidatedOpen] = useState(false);
   const [gapsOpen, setGapsOpen] = useState(false);
   const [answersOpen, setAnswersOpen] = useState(false);
   const [hiddenPersonMapSeries, setHiddenPersonMapSeries] = useState<PersonMapSeriesKey[]>([]);
   const [isPreparingAiResearchPack, setIsPreparingAiResearchPack] = useState(false);
+  const [isAskAiOpen, setIsAskAiOpen] = useState(false);
+  const { isTableSortPending, queueTableSort, clearTableSortPending } = useTableSortPending();
   const allProjectNames = useMemo(
     () => [...new Set(individuals.flatMap((individual) => individual.allProjects))].sort((a, b) => a.localeCompare(b)),
     [individuals],
@@ -356,9 +445,17 @@ export default function IndividualView() {
     clearPendingNavigation('/people');
   }, [clearPendingNavigation]);
 
+  useEffect(() => {
+    if (isTableSortPending) {
+      clearTableSortPending();
+    }
+  }, [clearTableSortPending, isTableSortPending, sortDir, sortKey]);
+
   // Reset all sections to collapsed whenever a new person is selected
   useEffect(() => {
     setBreakdownOpen(false);
+    setGoalsOpen(false);
+    setTeamValidatedOpen(false);
     setGapsOpen(false);
     setAnswersOpen(false);
     setHiddenPersonMapSeries([]);
@@ -445,19 +542,21 @@ export default function IndividualView() {
   const initialSortDirForKey = (key: SortKey): SortDir => (key === 'name' ? 'asc' : 'desc');
 
   const handleSort = (key: SortKey) => {
-    if (sortKey !== key) {
-      setSortKey(key);
-      setSortDir(initialSortDirForKey(key));
-      return;
-    }
+    queueTableSort(() => {
+      if (sortKey !== key) {
+        setSortKey(key);
+        setSortDir(initialSortDirForKey(key));
+        return;
+      }
 
-    if (sortDir === initialSortDirForKey(key)) {
-      setSortDir((current) => (current === 'asc' ? 'desc' : 'asc'));
-      return;
-    }
+      if (sortDir === initialSortDirForKey(key)) {
+        setSortDir((current) => (current === 'asc' ? 'desc' : 'asc'));
+        return;
+      }
 
-    setSortKey(null);
-    setSortDir('asc');
+      setSortKey(null);
+      setSortDir('asc');
+    });
   };
 
   const toggleTeam = (team: string) => {
@@ -483,6 +582,14 @@ export default function IndividualView() {
       prev.filter((currentDepartment) => currentDepartment !== department),
     );
   };
+
+  const personArchetypeById = useMemo(
+    () =>
+      Object.fromEntries(
+        individuals.map((person) => [person.id, resolveIndividualArchetype(person.scores)]),
+      ) as Record<string, IndividualArchetypeProfile>,
+    [individuals],
+  );
 
   const sorted = useMemo(() => {
     let filtered = individuals;
@@ -510,8 +617,14 @@ export default function IndividualView() {
     const resolvedSortDir = sortKey === null ? 'asc' : sortDir;
     const copy = [...filtered];
     copy.sort((a, b) => {
-      const av = getSortValue(a, resolvedSortKey);
-      const bv = getSortValue(b, resolvedSortKey);
+      const av =
+        resolvedSortKey === 'archetype'
+          ? personArchetypeById[a.id]?.label ?? ''
+          : getSortValue(a, resolvedSortKey);
+      const bv =
+        resolvedSortKey === 'archetype'
+          ? personArchetypeById[b.id]?.label ?? ''
+          : getSortValue(b, resolvedSortKey);
       let cmp = 0;
       if (typeof av === 'string' && typeof bv === 'string') {
         cmp = av.localeCompare(bv);
@@ -521,7 +634,15 @@ export default function IndividualView() {
       return resolvedSortDir === 'asc' ? cmp : -cmp;
     });
     return copy;
-  }, [individuals, nameQuery, selectedDepartments, sortKey, sortDir, selectedTeams]);
+  }, [
+    individuals,
+    nameQuery,
+    personArchetypeById,
+    selectedDepartments,
+    sortKey,
+    sortDir,
+    selectedTeams,
+  ]);
 
   const firstPersonAnchorByGroup = useMemo(() => {
     const anchors = new Map<string, { personId: string; anchorId: string }>();
@@ -654,10 +775,27 @@ export default function IndividualView() {
       ),
     [selectedPerson, selectedPersonTeamCohort],
   );
+  const selectedPersonTeamPeerResponses = useMemo(() => {
+    if (selectedPersonTeamPeers.length === 0) {
+      return [];
+    }
+
+    const peerIds = new Set(selectedPersonTeamPeers.map((person) => person.id));
+
+    return rawResponses.filter((response) => peerIds.has(response.username.split('@')[0]));
+  }, [rawResponses, selectedPersonTeamPeers]);
   const roleBenchmarkLabel = selectedPerson
     ? `Avg ${selectedPerson.role} peers`
     : 'Avg same role';
   const teamBenchmarkLabel = 'Avg current team(s)';
+  const handlePersonSelection = (person: Individual, isSelected: boolean) => {
+    if (isSelected) {
+      setSelectedPersonId(null);
+      return;
+    }
+
+    setSelectedPersonId(person.id);
+  };
   const roleAverageScores = useMemo(
     () =>
       selectedPersonRolePeers.length > 0
@@ -671,6 +809,17 @@ export default function IndividualView() {
         ? averageDimensionScores(selectedPersonTeamPeers)
         : null,
     [selectedPersonTeamPeers],
+  );
+  const teamValidatedView = useMemo(
+    () =>
+      selectedPersonResponse
+        ? buildTeamValidatedView(selectedPersonResponse, selectedPersonTeamPeerResponses)
+        : null,
+    [selectedPersonResponse, selectedPersonTeamPeerResponses],
+  );
+  const selectedPersonArchetype = useMemo<IndividualArchetypeProfile | null>(
+    () => (selectedPerson ? resolveIndividualArchetype(selectedPerson.scores) : null),
+    [selectedPerson],
   );
   const personMapData = useMemo(
     () =>
@@ -777,12 +926,68 @@ export default function IndividualView() {
     selectedPersonTeamPeers.length,
     teamAverageScores,
   ]);
+  const selectedPersonSuggestedGoals = useMemo(
+    () =>
+      selectedPerson
+        ? buildIndividualSuggestedGoals({
+            person: selectedPerson,
+            orgAvgScores,
+            roleAverageScores,
+            teamAverageScores,
+          })
+        : [],
+    [orgAvgScores, roleAverageScores, selectedPerson, teamAverageScores],
+  );
 
   const hasSelection = !!selectedPerson;
 
-  const openExternalAi = (url: string) => {
-    window.open(url, '_blank', 'noopener,noreferrer');
+  const getIndividualAiResearchPack = async () => {
+    if (!selectedPerson || !selectedPersonResponse) {
+      throw new Error('No respondent is selected.');
+    }
+
+    const { buildIndividualAiResearchPack } = await import('../data/survey/individualAiResearchPack');
+
+    return buildIndividualAiResearchPack({
+      person: selectedPerson,
+      rawResponse: selectedPersonResponse,
+      orgBenchmark: {
+        label: 'Org average',
+        respondentCount: individuals.length,
+        scores: orgAvgScores,
+      },
+      roleBenchmark: roleAverageScores
+        ? {
+            label: roleBenchmarkLabel,
+            respondentCount: selectedPersonRolePeers.length,
+            scores: roleAverageScores,
+          }
+        : null,
+      teamBenchmark: teamAverageScores
+        ? {
+            label: teamBenchmarkLabel,
+            respondentCount: selectedPersonTeamPeers.length,
+            scores: teamAverageScores,
+          }
+        : null,
+      teamNames: selectedPersonTeamScopeNames,
+    });
   };
+
+  const visibleAskAiName =
+    selectedPerson && !isSensitiveDataHidden ? selectedPerson.name : 'this respondent';
+
+  const askAiStarterQuestions = selectedPerson
+    ? [
+        `What stands out most about ${visibleAskAiName}?`,
+        'Where is this respondent below their benchmarks?',
+        'What are the best next steps for this person?',
+      ]
+    : [
+        'What stands out most about this respondent?',
+        'Where is this respondent below their benchmarks?',
+        'What are the best next steps for this person?',
+      ];
 
   const togglePersonMapSeries = (seriesKey: PersonMapSeriesKey) => {
     setHiddenPersonMapSeries((current) =>
@@ -800,31 +1005,7 @@ export default function IndividualView() {
     setIsPreparingAiResearchPack(true);
 
     try {
-      const { buildIndividualAiResearchPack } = await import('../data/survey/individualAiResearchPack');
-      const aiResearchPack = buildIndividualAiResearchPack({
-        person: selectedPerson,
-        rawResponse: selectedPersonResponse,
-        orgBenchmark: {
-          label: 'Org average',
-          respondentCount: individuals.length,
-          scores: orgAvgScores,
-        },
-        roleBenchmark: roleAverageScores
-          ? {
-              label: roleBenchmarkLabel,
-              respondentCount: selectedPersonRolePeers.length,
-              scores: roleAverageScores,
-            }
-          : null,
-        teamBenchmark: teamAverageScores
-          ? {
-              label: teamBenchmarkLabel,
-              respondentCount: selectedPersonTeamPeers.length,
-              scores: teamAverageScores,
-            }
-          : null,
-        teamNames: selectedPersonTeamScopeNames,
-      });
+      const aiResearchPack = await getIndividualAiResearchPack();
       const blob = new Blob([aiResearchPack.markdown], {
         type: 'text/markdown;charset=utf-8',
       });
@@ -886,7 +1067,9 @@ export default function IndividualView() {
                 key={department}
                 className="inline-flex items-center gap-1.5 pl-2 pr-1 py-1 text-sm font-normal rounded-md border border-transparent bg-[#f4f4f5] text-[#242424]"
               >
-                {department}
+                <SensitiveText as="span" hidden={isSensitiveDataHidden}>
+                  {department}
+                </SensitiveText>
                 <button
                   className="ml-1 rounded-full outline-none focus:ring-2 focus:ring-[#b0b0b0] focus:ring-offset-2"
                   onClick={() => removeDepartment(department)}
@@ -990,17 +1173,19 @@ export default function IndividualView() {
             <thead>
               <tr className="border-b border-[#eaeaea] text-left text-xs text-[#8b8b8b]">
                 <th className="px-4 py-3 font-medium">Name</th>
-                <SortHeader label="Level" sortKey="level" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} />
+                <SortHeader label="Level" sortKey="level" currentKey={sortKey} currentDir={sortDir} isPending={isTableSortPending} onSort={handleSort} />
+                <SortHeader label="Archetype" sortKey="archetype" currentKey={sortKey} currentDir={sortDir} isPending={isTableSortPending} onSort={handleSort} />
                 {INDIVIDUAL_DIMENSIONS.map((dim) => (
-                  <SortHeader key={dim.key} label={dim.label} sortKey={dim.key} currentKey={sortKey} currentDir={sortDir} onSort={handleSort} />
+                  <SortHeader key={dim.key} label={dim.label} sortKey={dim.key} currentKey={sortKey} currentDir={sortDir} isPending={isTableSortPending} onSort={handleSort} />
                 ))}
-                <SortHeader label="Updated" sortKey="updated" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} />
+                <SortHeader label="Updated" sortKey="updated" currentKey={sortKey} currentDir={sortDir} isPending={isTableSortPending} onSort={handleSort} />
               </tr>
             </thead>
             <tbody>
               {sorted.map((person) => {
                 const isSelected = selectedPersonId === person.id;
                 const lvl = person.overallLevel;
+                const archetype = personArchetypeById[person.id];
                 const groupKey = individualNameGroupKey(person.name);
                 const groupAnchorId =
                   groupKey && firstPersonAnchorByGroup.get(groupKey)?.personId === person.id
@@ -1020,7 +1205,7 @@ export default function IndividualView() {
                   <tr
                     key={person.id}
                     id={rowAnchorId}
-                    onClick={() => setSelectedPersonId(isSelected ? null : person.id)}
+                    onClick={() => handlePersonSelection(person, isSelected)}
                     className={`cursor-pointer border-b border-[#eaeaea] last:border-b-0 transition-colors ${
                       isSelected
                         ? 'bg-[#f4f4f5]'
@@ -1029,7 +1214,12 @@ export default function IndividualView() {
                   >
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2.5">
-                        <PersonAvatar name={person.name} className="h-8 w-8" textClassName="text-xs" />
+                        <PersonAvatar
+                          name={person.name}
+                          className="h-8 w-8"
+                          textClassName="text-xs"
+                          hidden={isSensitiveDataHidden}
+                        />
                         <div className="min-w-0">
                           <PersonNameText
                             name={person.name}
@@ -1053,6 +1243,19 @@ export default function IndividualView() {
                     </td>
                     <td className="px-4 py-3">
                       <LevelBadge level={lvl} />
+                    </td>
+                    <td className="px-4 py-3 text-sm text-[#242424]">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="inline-flex max-w-full items-center rounded-full border border-[#dbe6ff] bg-[#f5f8ff] px-3 py-1 text-xs font-semibold text-[#1d4ed8]">
+                            <span className="truncate">{archetype.label}</span>
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" sideOffset={8} className="max-w-[280px] px-3 py-2 text-[12px] leading-relaxed">
+                          <div className="font-medium text-white">{archetype.label}</div>
+                          <div className="mt-1 text-white/80">{archetype.signal}</div>
+                        </TooltipContent>
+                      </Tooltip>
                     </td>
                     {INDIVIDUAL_DIMENSIONS.map((dim) => {
                       const score = person.scores[dim.key];
@@ -1099,7 +1302,12 @@ export default function IndividualView() {
               {/* Modal header */}
               <div className="flex items-center justify-between border-b border-[#eaeaea] px-6 py-4">
               <div className="flex items-center gap-3">
-                  <PersonAvatar name={selectedPerson.name} className="h-10 w-10" textClassName="text-sm" />
+                  <PersonAvatar
+                    name={selectedPerson.name}
+                    className="h-10 w-10"
+                    textClassName="text-sm"
+                    hidden={isSensitiveDataHidden}
+                  />
                   <div>
                     <PersonNameText
                       name={selectedPerson.name}
@@ -1139,44 +1347,48 @@ export default function IndividualView() {
 	                        research pack for ChatGPT or Claude
 	                      </h3>
 	                      <p className="mt-2 text-sm leading-6 text-[#667085]">
-	                        Export a markdown brief with this respondent&apos;s maturity profile, org and cohort
-	                        benchmarks, strengths, growth areas, suggested actions, and question-level answers.
+	                        Ask questions in the sidebar or download a markdown brief with this
+	                        respondent&apos;s maturity profile, org and cohort benchmarks, strengths,
+	                        growth areas, suggested actions, and question-level answers.
 	                      </p>
 
 	                    <div className="mt-4 flex flex-wrap gap-2">
-	                      <button
-	                        type="button"
-	                        onClick={() =>
-	                          openExternalAi(
-	                            'https://chatgpt.com/g/g-6a1748e9d82c81918cc004536a458297-ai-maturity-index-analyst',
-	                          )
-	                        }
-	                        className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-[#e5e7eb] bg-white px-4 text-sm font-semibold text-[#242424] transition hover:border-[#d4d4d8] hover:bg-[#f8f8f9] focus:outline-none focus:ring-[3px] focus:ring-[#c7c7cc]/25"
-	                      >
-	                        <img src="/chatgpt-logo.svg" alt="" aria-hidden="true" className="h-4 w-4" />
-	                        Open ChatGPT
-	                      </button>
-
-	                      <button
-	                        type="button"
-	                        onClick={() => openExternalAi('https://claude.ai/')}
-	                        className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-[#e5e7eb] bg-white px-4 text-sm font-semibold text-[#242424] transition hover:border-[#d4d4d8] hover:bg-[#f8f8f9] focus:outline-none focus:ring-[3px] focus:ring-[#c7c7cc]/25"
-	                      >
-	                        <img src="/claude-logo.png" alt="" aria-hidden="true" className="h-4 w-4" />
-	                        Open Claude
-	                      </button>
+	                      <AskAiTriggerButton
+	                        onClick={() => setIsAskAiOpen(true)}
+	                        disabled={!selectedPersonResponse}
+	                      />
 
 	                      <button
 	                        type="button"
 	                        onClick={downloadIndividualAiResearchPack}
 	                        disabled={isPreparingAiResearchPack || !selectedPersonResponse}
-	                        className="inline-flex h-11 items-center justify-center rounded-2xl border border-[#d4d4d8] bg-[#f5f5f5] px-5 text-sm font-semibold text-[#3f3f46] transition hover:border-[#c4c4c7] hover:bg-[#ededee] focus:outline-none focus:ring-[3px] focus:ring-[#c7c7cc]/25 disabled:cursor-wait disabled:opacity-70"
+	                        className="inline-flex h-11 cursor-pointer items-center justify-center rounded-2xl border border-[#d4d4d8] bg-[#f5f5f5] px-5 text-sm font-semibold text-[#3f3f46] transition hover:border-[#c4c4c7] hover:bg-[#ededee] focus:outline-none focus:ring-[3px] focus:ring-[#c7c7cc]/25 disabled:cursor-wait disabled:opacity-70"
 	                      >
 	                        {isPreparingAiResearchPack ? 'Preparing AI research pack...' : 'Download AI research pack'}
 	                      </button>
 	                    </div>
 	                  </div>
 	                </section>
+
+                  <AskAiSidebar
+                    isOpen={isAskAiOpen}
+                    onClose={() => setIsAskAiOpen(false)}
+                    scopeType="individual"
+                    scopeLabel={
+                      selectedPerson && !isSensitiveDataHidden
+                        ? `${selectedPerson.name} analysis`
+                        : 'Respondent analysis'
+                    }
+                    scopeDescription="Ask follow-up questions about this respondent's strengths, weak spots, benchmark gaps, and the most useful next actions."
+                    avatarName={
+                      selectedPerson && !isSensitiveDataHidden ? selectedPerson.name : undefined
+                    }
+                    threadKey={selectedPerson?.id ?? 'no-person'}
+                    buildResearchPack={getIndividualAiResearchPack}
+                    starterQuestions={askAiStarterQuestions}
+                    disabled={!selectedPersonResponse}
+                    disabledReason="Ask AI needs a selected respondent with response data."
+                  />
 
 	                {/* Person Maturity Map (collapsible) */}
 	                <Collapsible open={breakdownOpen} onOpenChange={setBreakdownOpen} className="mt-3 mb-2">
@@ -1188,6 +1400,11 @@ export default function IndividualView() {
                     <span className="font-medium text-[#242424]">Person Maturity Map</span>
                     <div className="flex items-center gap-2">
                       <LevelBadge level={selectedPerson.overallLevel} maxWidthClassName="max-w-[11rem]" />
+                      {selectedPersonArchetype ? (
+                        <span className="inline-flex max-w-[12rem] items-center rounded-full border border-[#dbe6ff] bg-[#f5f8ff] px-3 py-1 text-xs font-semibold text-[#1d4ed8]">
+                          <span className="truncate">{selectedPersonArchetype.label}</span>
+                        </span>
+                      ) : null}
                       <ChevronDown
                         className={`h-4 w-4 text-[#8b8b8b] transition-transform ${breakdownOpen ? 'rotate-180' : ''}`}
                       />
@@ -1195,6 +1412,21 @@ export default function IndividualView() {
                   </CollapsibleTrigger>
                   <CollapsibleContent>
                     <div className="rounded-b-lg border border-[#eaeaea] bg-white p-4">
+                      {selectedPersonArchetype ? (
+                        <div className="mb-4 rounded-2xl border border-[#1d4ed8]/20 bg-[linear-gradient(135deg,#0f766e_0%,#1d4ed8_100%)] p-4 text-white shadow-sm">
+                          <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-white/75">
+                            Respondent archetype
+                          </div>
+                          <div className="mt-2 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+                            <div className="inline-flex min-w-[16rem] items-center rounded-full border border-white/25 bg-white/15 px-6 py-1 text-sm font-semibold text-white shadow-sm backdrop-blur-sm">
+                              {selectedPersonArchetype.label}
+                            </div>
+                            <p className="max-w-2xl text-sm text-white/85">
+                              {selectedPersonArchetype.signal}
+                            </p>
+                          </div>
+                        </div>
+                      ) : null}
                       <div className="flex flex-wrap gap-2">
                         {(Object.keys(personMapSeriesMeta) as PersonMapSeriesKey[]).map((seriesKey) => {
                           const series = personMapSeriesMeta[seriesKey];
@@ -1298,7 +1530,7 @@ export default function IndividualView() {
                               ) : null}
                               {!hiddenPersonMapSeries.includes('person') ? (
                                 <Radar
-                                  name={selectedPerson.name}
+                                  name={personMapSeriesMeta.person.label}
                                   dataKey="you"
                                   stroke={personColor}
                                   fill={personColor}
@@ -1382,8 +1614,249 @@ export default function IndividualView() {
                         )}
                       </div>
                     </div>
-                  </CollapsibleContent>
-                </Collapsible>
+	                  </CollapsibleContent>
+	                </Collapsible>
+
+                  <Collapsible open={goalsOpen} onOpenChange={setGoalsOpen} className="mb-2">
+                    <CollapsibleTrigger
+                      className={`flex w-full items-center justify-between border border-[#eaeaea] bg-[#f4f4f5]/60 p-3 hover:bg-[#f4f4f5] transition-colors ${
+                        goalsOpen ? 'rounded-t-lg border-b-0' : 'rounded-lg'
+                      }`}
+                    >
+                      <span className="font-medium text-[#242424]">
+                        Suggested next steps
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex rounded-full border border-[#e5e7eb] bg-white px-3 py-1 text-xs font-semibold text-[#374151]">
+                          {selectedPersonSuggestedGoals.length} goals
+                        </span>
+                        <ChevronDown
+                          className={`h-4 w-4 text-[#8b8b8b] transition-transform ${goalsOpen ? 'rotate-180' : ''}`}
+                        />
+                      </div>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <section className="rounded-b-lg border border-[#e5e7eb] bg-white p-5 shadow-sm">
+                        <div>
+                          <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-[#8b8b8b]">
+                            Suggested goals
+                          </div>
+                          <h4 className="mt-2 text-lg font-semibold tracking-tight text-[#1f2937]">
+                            Suggested next steps
+                          </h4>
+                          <p className="mt-2 text-sm leading-6 text-[#667085]">
+                            These suggestions come from the built-in goal catalog and are ranked using
+                            this respondent&apos;s weakest dimensions, benchmark gaps, and question-level
+                            survey signals.
+                          </p>
+                        </div>
+
+                        <div className="mt-4 grid gap-4 xl:grid-cols-3">
+                          {selectedPersonSuggestedGoals.map((goal) => (
+                            <SuggestedGoalCard key={goal.id} goal={goal} />
+                          ))}
+                        </div>
+                      </section>
+                    </CollapsibleContent>
+                  </Collapsible>
+
+                  {teamValidatedView ? (
+                    <Collapsible
+                      open={teamValidatedOpen}
+                      onOpenChange={setTeamValidatedOpen}
+                      className="mb-2"
+                    >
+                      <CollapsibleTrigger
+                        className={`flex w-full items-center justify-between border border-[#eaeaea] bg-[#f4f4f5]/60 p-3 hover:bg-[#f4f4f5] transition-colors ${
+                          teamValidatedOpen ? 'rounded-t-lg border-b-0' : 'rounded-lg'
+                        }`}
+                      >
+                        <span className="font-medium text-[#242424]">
+                          Compared with others
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="inline-flex rounded-full border border-[#e5e7eb] bg-white px-3 py-1 text-xs font-semibold text-[#374151]">
+                            {teamValidatedView.alignmentGap !== null
+                              ? formatSignedDelta(teamValidatedView.alignmentGap)
+                              : 'N/A'}
+                          </span>
+                          <ChevronDown
+                            className={`h-4 w-4 text-[#8b8b8b] transition-transform ${teamValidatedOpen ? 'rotate-180' : ''}`}
+                          />
+                        </div>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <section className="rounded-b-lg border border-[#eaeaea] bg-white p-5 shadow-sm">
+                          <div className="flex flex-wrap items-start justify-between gap-4">
+                            <div className="max-w-3xl">
+                              <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-[#64748b]">
+                                Team-Validated View
+                              </div>
+                              <h3 className="mt-2 flex items-center gap-2 text-lg font-semibold tracking-tight text-[#1f2937]">
+                                Compared with others
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span className="cursor-help text-sm font-medium text-[#64748b] underline decoration-dotted underline-offset-4">
+                                      proxy
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="top" sideOffset={8} className="max-w-[300px] px-3 py-2 text-[12px] leading-relaxed">
+                                    This score is inferred from existing survey signals: the person&apos;s own evidence of helping others adopt AI, plus the AI climate reported by teammates on the same project scope.
+                                  </TooltipContent>
+                                </Tooltip>
+                              </h3>
+                              <p className="mt-2 text-sm leading-6 text-[#64748b]">
+                                {proxyAvailabilityNote(
+                                  teamValidatedView.peerRespondentCount,
+                                  teamValidatedView.teamClimateValidationScore,
+                                )}
+                              </p>
+                              <p className="mt-3 text-sm leading-6 text-[#475569]">
+                                Self-Reported Maturity is the person&apos;s own survey score.
+                                Team-Validated Proxy estimates how much that maturity is visible in real team behavior.
+                                Alignment Gap is the difference: self score minus team-validated proxy.
+                              </p>
+                            </div>
+                            <div className="rounded-2xl border border-[#dbe4f0] bg-white px-4 py-3 text-sm text-[#475569]">
+                              <div className="font-medium text-[#0f172a]">
+                                {teamValidatedView.peerRespondentCount} team peer
+                                {teamValidatedView.peerRespondentCount === 1 ? '' : 's'}
+                              </div>
+                              <div className="mt-1 text-xs">
+                                {teamValidatedView.influenceAnsweredSignals} of{' '}
+                                {teamValidatedView.influenceSignalCount} own influence signals answered
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="mt-5 grid gap-3 md:grid-cols-3">
+                            <div className="rounded-2xl border border-[#dbe4f0] bg-white p-4">
+                              <div className="text-xs font-medium uppercase tracking-[0.12em] text-[#64748b]">
+                                Self-Reported Maturity
+                              </div>
+                              <div className="mt-3 flex items-end justify-between gap-3">
+                                <div className="text-3xl font-semibold tracking-tight text-[#0f172a]">
+                                  {teamValidatedView.selfOverallScore.toFixed(1)}
+                                </div>
+                                <LevelBadge level={scoreToLevel(teamValidatedView.selfOverallScore)} />
+                              </div>
+                              <p className="mt-3 text-sm leading-6 text-[#64748b]">
+                                This is the standard maturity score already used across the dashboard, calculated only from this respondent&apos;s own answers.
+                              </p>
+                            </div>
+
+                            <div className="rounded-2xl border border-[#dbe4f0] bg-white p-4">
+                              <div className="text-xs font-medium uppercase tracking-[0.12em] text-[#64748b]">
+                                Team-Validated Proxy
+                              </div>
+                              <div className="mt-3 flex items-end justify-between gap-3">
+                                <div className="text-3xl font-semibold tracking-tight text-[#0f172a]">
+                                  {teamValidatedView.peerViewProxyScore?.toFixed(1) ?? 'N/A'}
+                                </div>
+                                {teamValidatedView.peerViewProxyScore !== null ? (
+                                  <LevelBadge level={scoreToLevel(teamValidatedView.peerViewProxyScore)} />
+                                ) : null}
+                              </div>
+                              <p className="mt-3 text-sm leading-6 text-[#64748b]">
+                                This is a proxy from existing data: 65% comes from this person&apos;s own evidence of helping others adopt AI, and 35% comes from teammate signals about the surrounding AI climate.
+                              </p>
+                            </div>
+
+                            <div className="rounded-2xl border border-[#dbe4f0] bg-white p-4">
+                              <div className="text-xs font-medium uppercase tracking-[0.12em] text-[#64748b]">
+                                Alignment Gap
+                              </div>
+                              <div className="mt-3 flex items-end justify-between gap-3">
+                                <div className="text-3xl font-semibold tracking-tight text-[#0f172a]">
+                                  {teamValidatedView.alignmentGap !== null
+                                    ? formatSignedDelta(teamValidatedView.alignmentGap)
+                                    : 'N/A'}
+                                </div>
+                                {teamValidatedView.alignmentGap !== null ? (
+                                  <span
+                                    className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+                                      Math.abs(teamValidatedView.alignmentGap) <= 0.35
+                                        ? 'bg-[#ecfdf5] text-[#047857]'
+                                        : teamValidatedView.alignmentGap > 0
+                                          ? 'bg-[#fff7ed] text-[#c2410c]'
+                                          : 'bg-[#eff6ff] text-[#1d4ed8]'
+                                    }`}
+                                  >
+                                    {Math.abs(teamValidatedView.alignmentGap) <= 0.35
+                                      ? 'Aligned'
+                                      : teamValidatedView.alignmentGap > 0
+                                        ? 'Self > proxy'
+                                        : 'Proxy > self'}
+                                  </span>
+                                ) : null}
+                              </div>
+                              <p className="mt-3 text-sm leading-6 text-[#64748b]">
+                                Positive means the self-score is higher than the team-validated proxy. Negative means the maturity shows up around them more strongly than they rated themselves.
+                              </p>
+                              <p className="mt-2 text-xs leading-5 text-[#8b8b8b]">
+                                {alignmentGapSummary(teamValidatedView.alignmentGap)}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="mt-5 grid gap-3 md:grid-cols-2">
+                            <div className="rounded-2xl border border-[#dbe4f0] bg-white p-4">
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <div className="text-sm font-medium text-[#0f172a]">Influence evidence</div>
+                                  <div className="mt-1 text-xs leading-5 text-[#64748b]">
+                                    Signals from this respondent about whether their AI behavior spreads to others through advice, artifacts, workflows, and durable practices.
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <div className="text-lg font-semibold text-[#0f172a]">
+                                    {formatScoreValue(teamValidatedView.influenceEvidenceScore)}
+                                  </div>
+                                  <div className="mt-1 text-[11px] text-[#8b8b8b]">
+                                    {teamValidatedView.influenceAnsweredSignals} answered signals
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="rounded-2xl border border-[#dbe4f0] bg-white p-4">
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <div className="text-sm font-medium text-[#0f172a]">Team climate validation</div>
+                                  <div className="mt-1 text-xs leading-5 text-[#64748b]">
+                                    Signals from teammates in the same current team scope about shared practices, discussion habits, durability, and the AI maturity around them.
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <div className="text-lg font-semibold text-[#0f172a]">
+                                    {formatScoreValue(teamValidatedView.teamClimateValidationScore)}
+                                  </div>
+                                  <div className="mt-1 text-[11px] text-[#8b8b8b]">
+                                    {teamValidatedView.peerRespondentCount} peer respondents
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="mt-5 grid gap-3 xl:grid-cols-2">
+                            <div className="space-y-3">
+                              <div className="text-sm font-medium text-[#0f172a]">Own influence signals</div>
+                              {teamValidatedView.influenceSignals.map((signal) => (
+                                <TeamValidatedSignalRow key={signal.id} signal={signal} />
+                              ))}
+                            </div>
+                            <div className="space-y-3">
+                              <div className="text-sm font-medium text-[#0f172a]">Team climate signals</div>
+                              {teamValidatedView.teamSignals.map((signal) => (
+                                <TeamValidatedSignalRow key={signal.id} signal={signal} />
+                              ))}
+                            </div>
+                          </div>
+                        </section>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  ) : null}
 
 	                <Collapsible open={gapsOpen} onOpenChange={setGapsOpen} className="mb-2">
 	                  <CollapsibleTrigger

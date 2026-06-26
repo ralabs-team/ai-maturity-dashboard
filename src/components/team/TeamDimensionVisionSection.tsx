@@ -34,7 +34,7 @@ export default function TeamDimensionVisionSection({
   return (
     <section id="team-dimension-vision" className="mt-8 scroll-mt-24">
       <TeamSectionHeader
-        title="Dimension 5: Vision"
+        title="Dimension: Vision"
         subtitle={`See how clearly people inside the selected ${scopeLabelLower} can imagine future AI-enabled workflows and connect them to real business value.`}
       />
 

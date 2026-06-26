@@ -64,7 +64,7 @@ export default function TeamDimensionCultureSection({
   return (
     <section id="team-dimension-culture" className="mt-8 scroll-mt-24">
       <TeamSectionHeader
-        title="Dimension 4: Culture"
+        title="Dimension: Culture"
         subtitle={`See whether AI practice inside the selected ${scopeLabelLower} is spreading socially, feels supported, and is becoming enjoyable and durable rather than isolated.`}
       />
 

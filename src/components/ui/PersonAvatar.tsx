@@ -2,17 +2,21 @@ interface PersonAvatarProps {
   name: string;
   className?: string;
   textClassName?: string;
+  hidden?: boolean;
 }
 
 export default function PersonAvatar({
   name,
   className = 'h-8 w-8',
   textClassName = 'text-xs',
+  hidden = false,
 }: PersonAvatarProps) {
-  const initials = name
-    .split(' ')
-    .map((word) => word[0])
-    .join('');
+  const initials = hidden
+    ? '--'
+    : name
+        .split(' ')
+        .map((word) => word[0])
+        .join('');
 
   return (
     <div

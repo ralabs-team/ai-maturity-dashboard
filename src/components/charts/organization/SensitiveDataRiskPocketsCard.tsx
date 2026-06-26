@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from '../recharts';
+import ChartFeedback from '../../analytics/ChartFeedback';
+import { SensitiveAxisTick, SensitiveTooltipLabel } from '../../ui/SensitiveChartText';
 
 type Scope = 'department' | 'team';
 type Row = {
@@ -26,9 +28,11 @@ function TooltipContent({
 
   return (
     <div className="rounded-md bg-[#242424] px-4 py-3 text-sm text-white shadow-lg">
-      <div className="mb-2 font-semibold text-white">
-        {scope === 'department' ? 'Department' : 'Team'}: {label ?? point.name}
-      </div>
+      <SensitiveTooltipLabel
+        prefix={scope === 'department' ? 'Department' : 'Team'}
+        value={String(label ?? point.name)}
+        className="mb-2 font-semibold text-white"
+      />
       <div className="space-y-1">
         <div>Safe handling score: {point.score.toFixed(1)} / 5</div>
         <div>Risky or uncertain responses: {point.riskyShare.toFixed(1)}%</div>
@@ -49,7 +53,8 @@ export default function SensitiveDataRiskPocketsCard({
   const rows = scope === 'department' ? departmentRows : teamRows;
 
   return (
-    <section className="rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
+    <section className="group relative rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
+      <ChartFeedback chartTitle="Sensitive data risk pockets" page="organization" />
       <h3 className="text-lg font-semibold tracking-tight text-[#242424]">
         Sensitive data risk pockets
       </h3>
@@ -90,7 +95,14 @@ export default function SensitiveDataRiskPocketsCard({
               dataKey="name"
               type="category"
               width={150}
-              tick={{ fontSize: 12, fill: '#525252' }}
+              tick={
+                <SensitiveAxisTick
+                  fill="#525252"
+                  fontSize={12}
+                  textAnchor="end"
+                  dy={4}
+                />
+              }
               axisLine={false}
               tickLine={false}
             />

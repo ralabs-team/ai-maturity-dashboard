@@ -29,20 +29,20 @@ function splitNameParts(name: string): { firstName: string; remainder: string } 
 }
 
 function PersonNameText({ name, hideSurname = false }: { name: string; hideSurname?: boolean }) {
+  if (hideSurname) {
+    return (
+      <SensitiveText as="span" hidden>
+        {name || 'Unknown'}
+      </SensitiveText>
+    );
+  }
+
   const { firstName, remainder } = splitNameParts(name);
 
   return (
     <span>
       <span>{firstName || 'Unknown'}</span>
-      {remainder ? (
-        hideSurname ? (
-          <SensitiveText as="span" hidden className="inline-block">
-            {remainder}
-          </SensitiveText>
-        ) : (
-          <span>{remainder}</span>
-        )
-      ) : null}
+      {remainder ? <span>{remainder}</span> : null}
     </span>
   );
 }
@@ -200,6 +200,7 @@ export default function ChampionVisibilityOptions({
                         name={row.person.name}
                         className="h-10 w-10 shrink-0"
                         textClassName="text-sm"
+                        hidden={isSensitiveDataHidden}
                       />
                       <div className="min-w-0">
                         <Link
@@ -212,7 +213,10 @@ export default function ChampionVisibilityOptions({
                           />
                         </Link>
                         <div className="mt-1 text-sm text-[#737373]">
-                          {row.person.role} · {row.person.department}
+                          {row.person.role} ·{' '}
+                          <SensitiveText as="span" hidden={isSensitiveDataHidden}>
+                            {row.person.department}
+                          </SensitiveText>
                         </div>
                         <SensitiveText
                           as="div"

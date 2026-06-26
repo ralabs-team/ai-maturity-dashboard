@@ -43,7 +43,7 @@ export default function TeamDimensionImpactSection({
   return (
     <section id="team-dimension-impact" className="mt-8 scroll-mt-24">
       <TeamSectionHeader
-        title="Dimension 3: Impact"
+        title="Dimension: Impact"
         subtitle={`See how deeply AI value is embedded inside the selected ${scopeLabelLower}, where cost maturity stands, and what still blocks visible impact.`}
       />
 

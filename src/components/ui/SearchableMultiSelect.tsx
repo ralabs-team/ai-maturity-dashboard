@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ChevronDown } from 'lucide-react';
+import { useSensitiveData } from '../privacy/SensitiveDataContext';
+import SensitiveText from './SensitiveText';
 
 type SearchableMultiSelectProps = {
   placeholder: string;
@@ -54,6 +56,7 @@ export default function SearchableMultiSelect({
   renderOptionLabel,
   renderOptionTrailing,
 }: SearchableMultiSelectProps) {
+  const { isSensitiveDataHidden } = useSensitiveData();
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const dropdownRef = useRef<HTMLDivElement | null>(null);
@@ -76,6 +79,9 @@ export default function SearchableMultiSelect({
       : `${selectedValues.length} ${
           selectedValues.length === 1 ? singularLabel : pluralLabel
         }`;
+  const shouldMaskOptionLabels =
+    isSensitiveDataHidden &&
+    (placeholder.toLowerCase().includes('department') || placeholder.toLowerCase().includes('team'));
 
   useEffect(() => {
     if (!open) {
@@ -175,7 +181,13 @@ export default function SearchableMultiSelect({
                   {renderOptionLabel ? (
                     renderOptionLabel(option)
                   ) : (
-                    <span className="min-w-0 flex-1 truncate">{option}</span>
+                    <SensitiveText
+                      as="span"
+                      hidden={shouldMaskOptionLabels}
+                      className="min-w-0 flex-1 truncate"
+                    >
+                      {option}
+                    </SensitiveText>
                   )}
                   {renderOptionTrailing ? renderOptionTrailing(option) : null}
                 </button>

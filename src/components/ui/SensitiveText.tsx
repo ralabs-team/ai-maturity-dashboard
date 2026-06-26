@@ -24,6 +24,14 @@ export default function SensitiveText({
         hidden &&
           'select-none rounded-sm bg-[#d9d9d9] text-transparent opacity-100 transition-[background-color,color] duration-150 ease-out',
       )}
+      style={
+        hidden
+          ? {
+              color: 'transparent',
+              WebkitTextFillColor: 'transparent',
+            }
+          : undefined
+      }
     >
       {children}
     </Component>

@@ -1,5 +1,5 @@
 import type { RawResponse } from './scoring';
-import type { SurveyType } from './scoring/shared';
+import type { SurveyType } from '../../shared/survey-domain';
 
 export type TeamSeriesItem<K extends string = string> = {
   key: K;

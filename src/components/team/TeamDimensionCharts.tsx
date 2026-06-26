@@ -7,6 +7,10 @@ import {
   XAxis,
   YAxis,
 } from '../charts/recharts';
+import { formatPercentageLabel } from '../charts/formatters';
+import ChartFeedback from '../analytics/ChartFeedback';
+import { useSensitiveData } from '../privacy/SensitiveDataContext';
+import SensitiveText from '../ui/SensitiveText';
 import type {
   TeamBarDistributionRow,
   TeamSeriesItem,
@@ -38,11 +42,15 @@ function ScopeMetaBadges({
   respondentCount: number;
   cohortBadgeLabel?: string;
 }) {
+  const { isSensitiveDataHidden } = useSensitiveData();
+
   return (
     <div className="mt-4 flex flex-wrap gap-2">
       <div className="inline-flex items-center gap-2 rounded-full border border-[#e5e7eb] bg-white px-3 py-1.5 text-xs font-medium text-[#374151]">
         <span className="text-[#8b8b8b]">Selected scope:</span>
-        <span className="text-[#242424]">{selectedScopeName}</span>
+        <SensitiveText as="span" hidden={isSensitiveDataHidden} className="text-[#242424]">
+          {selectedScopeName}
+        </SensitiveText>
       </div>
       <div className="inline-flex items-center gap-2 rounded-full border border-[#e5e7eb] bg-[#fafafa] px-3 py-1.5 text-xs font-medium text-[#374151]">
         <span>{respondentCount} responses</span>
@@ -77,7 +85,9 @@ function StackedDistributionTooltip({
   return (
     <div className="rounded-md bg-[#242424] px-4 py-3 text-sm text-white shadow-lg">
       <div className="font-semibold text-white">{segment.name}</div>
-      <div className="mt-1">{typeof segment.value === 'number' ? `${segment.value.toFixed(1)}%` : '0%'}</div>
+      <div className="mt-1">
+        {typeof segment.value === 'number' ? formatPercentageLabel(segment.value) : '0%'}
+      </div>
       {typeof count === 'number' ? (
         <div className="mt-1 text-xs text-white/75">
           {count} of {row.respondents} respondents
@@ -132,7 +142,16 @@ export function StackedDistributionCard({
   const respondentCount = row?.respondents ?? 0;
 
   return (
-    <section className="mt-5 rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
+    <section className="group relative mt-5 rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
+      <ChartFeedback
+        chartTitle={title}
+        page="team"
+        eventProperties={{
+          chart_section: 'team_dimensions',
+          selected_scope_name_length: selectedScopeName.length,
+          respondent_count: respondentCount,
+        }}
+      />
       <h3 className="text-lg font-semibold tracking-tight text-[#242424]">{title}</h3>
       <p className="mt-1 text-sm text-[#7a7a7a]">{description}</p>
       <ScopeMetaBadges
@@ -154,7 +173,7 @@ export function StackedDistributionCard({
               <XAxis
                 type="number"
                 domain={[0, 100]}
-                tickFormatter={(value) => `${value}%`}
+                tickFormatter={formatPercentageLabel}
                 tick={{ fontSize: 12, fill: '#737373' }}
                 axisLine={false}
                 tickLine={false}
@@ -167,7 +186,7 @@ export function StackedDistributionCard({
                 axisLine={false}
                 tickLine={false}
               />
-              <Tooltip isAnimationActive={false} content={<StackedDistributionTooltip />} />
+              <Tooltip isAnimationActive={false} shared={false} content={<StackedDistributionTooltip />} />
               {series.map((entry, index) => (
                 <Bar
                   key={entry.key}
@@ -214,7 +233,16 @@ export function RankedBarCard({
   respondentCount: number;
 }) {
   return (
-    <section className="mt-5 rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
+    <section className="group relative mt-5 rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
+      <ChartFeedback
+        chartTitle={title}
+        page="team"
+        eventProperties={{
+          chart_section: 'team_dimensions',
+          selected_scope_name_length: selectedScopeName.length,
+          respondent_count: respondentCount,
+        }}
+      />
       <h3 className="text-lg font-semibold tracking-tight text-[#242424]">{title}</h3>
       <p className="mt-1 text-sm text-[#7a7a7a]">{description}</p>
       <ScopeMetaBadges

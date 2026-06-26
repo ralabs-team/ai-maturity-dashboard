@@ -15,6 +15,8 @@ import {
   Loader2,
   Eye,
   EyeOff,
+  Pencil,
+  LibraryBig,
 } from 'lucide-react';
 import {
   Sidebar as SidebarShell,
@@ -31,9 +33,13 @@ import {
   useSidebar,
 } from '../ui/sidebar';
 import { useSensitiveData } from '../privacy/SensitiveDataContext';
+import { INDIVIDUAL_ARCHETYPE_CATALOG } from '../../data/survey/individualArchetypes';
+import { TEAM_ARCHETYPE_CATALOG } from '../../data/survey/teamArchetypes';
 import { useSurveyData } from '../../data/survey/SurveyDataContext';
+import { INDIVIDUAL_GOAL_CATALOG, TEAM_GOAL_CATALOG } from '../../data/survey/goals';
 import { allDepartmentsList, allProjectsList } from '../../data/survey/scoring';
 import { useWorkspaceIdentity } from '../../data/workspace/WorkspaceIdentityContext';
+import { trackEvent } from '../../lib/amplitude';
 import { useNavigationPending } from './NavigationPendingContext';
 
 interface NavItem {
@@ -51,7 +57,9 @@ interface NavSection {
 const navSections: NavSection[] = [
   {
     label: 'Navigation',
-    links: [{ to: '/surveys', label: 'Surveys', icon: ClipboardList }],
+    links: [
+      { to: '/surveys', label: 'Surveys', icon: ClipboardList },
+    ],
   },
   {
     label: 'Insights',
@@ -77,13 +85,20 @@ const navSections: NavSection[] = [
     ],
   },
   {
-    label: 'Data Overview',
+    label: 'Data',
     links: [
       { to: '/data', label: 'Responses', icon: ListChecks },
       { to: '/projects', label: 'Projects', icon: Database },
       { to: '/departments', label: 'Departments', icon: Building },
       { to: '/seniority', label: 'Seniority', icon: Award },
       { to: '/overview/people', label: 'People', icon: Users },
+    ],
+  },
+  {
+    label: 'Frameworks',
+    links: [
+      { to: '/goals', label: 'Goals Library', icon: LibraryBig },
+      { to: '/archetypes', label: 'Archetypes', icon: Sparkles },
     ],
   },
 ];
@@ -98,8 +113,6 @@ const DATA_GATED_PATHS = new Set([
   '/overview/people',
 ]);
 
-const INSIGHT_PENDING_PATHS = new Set(['/organization', '/teams', '/people']);
-
 export default function Sidebar() {
   const { state, toggleSidebar, setOpenMobile } = useSidebar();
   const location = useLocation();
@@ -107,7 +120,7 @@ export default function Sidebar() {
   const isCollapsed = state === 'collapsed';
   const { rawResponses, hasResponseData } = useSurveyData();
   const { isSensitiveDataHidden, toggleSensitiveData } = useSensitiveData();
-  const { workspaceName } = useWorkspaceIdentity();
+  const { workspaceName, openWorkspaceIdentityModal } = useWorkspaceIdentity();
   const { pendingPath, startPendingNavigation, clearPendingNavigation } = useNavigationPending();
   const homePath = hasResponseData ? '/people' : '/surveys';
   const pendingNavigationFramesRef = useRef<number[]>([]);
@@ -144,6 +157,8 @@ export default function Sidebar() {
       '/departments': departments.size,
       '/seniority': seniorities.size,
       '/overview/people': usernames.size,
+      '/goals': INDIVIDUAL_GOAL_CATALOG.length + TEAM_GOAL_CATALOG.length,
+      '/archetypes': TEAM_ARCHETYPE_CATALOG.length + INDIVIDUAL_ARCHETYPE_CATALOG.length,
     } as const;
   }, [rawResponses]);
 
@@ -170,11 +185,6 @@ export default function Sidebar() {
   };
 
   const handleNavigationClick = (to: string) => (event: MouseEvent<HTMLAnchorElement>) => {
-    if (!INSIGHT_PENDING_PATHS.has(to)) {
-      cancelPendingNavigation();
-      return;
-    }
-
     if (
       event.defaultPrevented ||
       event.button !== 0 ||
@@ -216,22 +226,45 @@ export default function Sidebar() {
   return (
     <SidebarShell collapsible="icon">
       <SidebarHeader className="px-6 py-5 group-data-[collapsible=icon]:px-2">
-        <Link
-          to={homePath}
-          className="flex items-center gap-3 transition-opacity hover:opacity-90 group-data-[collapsible=icon]:justify-center"
-        >
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[linear-gradient(135deg,#0f766e_0%,#1d4ed8_100%)] text-white">
-            <Sparkles className="h-4 w-4" fill="currentColor" strokeWidth={1.5} />
-          </div>
-          <div className="flex flex-col whitespace-nowrap group-data-[collapsible=icon]:hidden">
-            <div className="text-lg font-semibold tracking-tight text-[var(--sidebar-foreground)]">
-              AI Maturity Index
+        <div className="flex items-center gap-3 group-data-[collapsible=icon]:justify-center">
+          <Link
+            to={homePath}
+            className="flex shrink-0 items-center justify-center rounded-lg transition-opacity hover:opacity-90"
+          >
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[linear-gradient(135deg,#0f766e_0%,#1d4ed8_100%)] text-white">
+              <Sparkles className="h-4 w-4" fill="currentColor" strokeWidth={1.5} />
             </div>
-            <div className="min-h-5 max-w-[180px] truncate text-[15px] font-medium text-[var(--sidebar-muted)]">
-              {workspaceName}
+          </Link>
+          <div className="flex min-w-0 flex-col whitespace-nowrap group-data-[collapsible=icon]:hidden">
+            <Link
+              to={homePath}
+              className="text-lg font-semibold tracking-tight text-[var(--sidebar-foreground)] transition-opacity hover:opacity-90"
+            >
+                AI Maturity Index
+            </Link>
+            <div className="group/workspace-name flex min-h-5 items-center gap-1.5">
+              <Link
+                to={homePath}
+                className="max-w-[180px] truncate text-[15px] font-medium text-[var(--sidebar-muted)] transition-opacity hover:opacity-90"
+              >
+                {workspaceName}
+              </Link>
+              <button
+                type="button"
+                aria-label="Edit workspace settings"
+                onClick={() => {
+                  trackEvent('workspace_name_edit_clicked', {
+                    source: 'sidebar',
+                  });
+                  openWorkspaceIdentityModal();
+                }}
+                className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[var(--sidebar-muted)] opacity-0 transition hover:bg-[var(--sidebar-accent)] hover:text-[var(--sidebar-foreground)] focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sidebar-ring)] group-hover/workspace-name:opacity-100"
+              >
+                <Pencil className="h-3.5 w-3.5" strokeWidth={2} />
+              </button>
             </div>
           </div>
-        </Link>
+        </div>
       </SidebarHeader>
 
       <SidebarSeparator />

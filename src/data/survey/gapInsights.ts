@@ -1,7 +1,7 @@
 import type { Individual } from '../types';
 import { LEVEL_LABELS, scoreToLevel } from '../types';
 import { allDepartmentsList, allProjectsList, type RawResponse } from './scoring';
-import type { SurveyType } from './scoring/shared';
+import type { SurveyType } from '../../shared/survey-domain';
 
 export type GapScope = 'department' | 'team';
 export type UsageImpactQuadrantKey = 'highHigh' | 'highLow' | 'lowHigh' | 'lowLow';

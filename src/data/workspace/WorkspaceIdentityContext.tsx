@@ -6,16 +6,22 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import type { Workspace } from '../../shared/survey-domain';
+import { setAnalyticsConsent, setAnalyticsWorkspaceName } from '../../lib/amplitude';
 
 const STORAGE_KEY = 'ai-maturity-dashboard.workspace-name.v1';
 const ANONYMIZED_DATA_CONSENT_STORAGE_KEY = 'ai-maturity-dashboard.anonymized-data-consent.v1';
 
 interface WorkspaceIdentityContextValue {
+  workspace: Workspace | null;
   workspaceName: string;
   hasWorkspaceName: boolean;
   anonymizedDataConsent: boolean;
+  isWorkspaceIdentityModalOpen: boolean;
   setWorkspaceName: (nextName: string) => void;
   setAnonymizedDataConsent: (nextValue: boolean) => void;
+  openWorkspaceIdentityModal: () => void;
+  closeWorkspaceIdentityModal: () => void;
 }
 
 const WorkspaceIdentityContext = createContext<WorkspaceIdentityContextValue | null>(null);
@@ -62,6 +68,7 @@ export function WorkspaceIdentityProvider({ children }: { children: ReactNode })
   const [anonymizedDataConsent, setAnonymizedDataConsentState] = useState(() =>
     readStoredAnonymizedDataConsent(),
   );
+  const [isWorkspaceIdentityModalOpen, setIsWorkspaceIdentityModalOpen] = useState(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -87,6 +94,14 @@ export function WorkspaceIdentityProvider({ children }: { children: ReactNode })
     );
   }, [anonymizedDataConsent]);
 
+  useEffect(() => {
+    setAnalyticsConsent(anonymizedDataConsent);
+  }, [anonymizedDataConsent]);
+
+  useEffect(() => {
+    setAnalyticsWorkspaceName(workspaceName);
+  }, [workspaceName]);
+
   const setWorkspaceName = (nextName: string) => {
     setWorkspaceNameState(normalizeWorkspaceName(nextName));
   };
@@ -95,15 +110,33 @@ export function WorkspaceIdentityProvider({ children }: { children: ReactNode })
     setAnonymizedDataConsentState(nextValue);
   };
 
+  const openWorkspaceIdentityModal = () => {
+    setIsWorkspaceIdentityModalOpen(true);
+  };
+
+  const closeWorkspaceIdentityModal = () => {
+    setIsWorkspaceIdentityModalOpen(false);
+  };
+
   const value = useMemo(
     () => ({
+      workspace: workspaceName
+        ? {
+            id: 'local-workspace',
+            name: workspaceName,
+            anonymizedDataConsent,
+          }
+        : null,
       workspaceName,
       hasWorkspaceName: workspaceName.length > 0,
       anonymizedDataConsent,
+      isWorkspaceIdentityModalOpen,
       setWorkspaceName,
       setAnonymizedDataConsent,
+      openWorkspaceIdentityModal,
+      closeWorkspaceIdentityModal,
     }),
-    [workspaceName, anonymizedDataConsent],
+    [workspaceName, anonymizedDataConsent, isWorkspaceIdentityModalOpen],
   );
 
   return (

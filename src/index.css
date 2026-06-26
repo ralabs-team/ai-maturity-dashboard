@@ -22,6 +22,16 @@ body {
   color: var(--foreground);
 }
 
+body[data-navigation-pending='true'],
+body[data-table-sort-pending='true'],
+body[data-navigation-pending='true'] * {
+  cursor: progress !important;
+}
+
+body[data-table-sort-pending='true'] * {
+  cursor: progress !important;
+}
+
 .recharts-cartesian-grid-horizontal line,
 .recharts-cartesian-grid-vertical line {
   stroke: #e2e8f0;

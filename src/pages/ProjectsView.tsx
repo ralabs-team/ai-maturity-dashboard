@@ -1,5 +1,5 @@
-import { useMemo, useState, type KeyboardEvent } from 'react';
-import { ArrowDown, ArrowUp, ArrowUpDown, Pencil, Check, X } from 'lucide-react';
+import { useEffect, useMemo, useState, type KeyboardEvent } from 'react';
+import { ArrowDown, ArrowUp, ArrowUpDown, Check, Loader2, Pencil, X } from 'lucide-react';
 import PageHeader from '../components/layout/PageHeader';
 import { useSensitiveData } from '../components/privacy/SensitiveDataContext';
 import PersonAvatar from '../components/ui/PersonAvatar';
@@ -8,6 +8,8 @@ import SensitiveText from '../components/ui/SensitiveText';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip';
 import { useSurveyData } from '../data/survey/SurveyDataContext';
 import { allProjectsList } from '../data/survey/scoring';
+import { trackEvent } from '../lib/amplitude';
+import { useTableSortPending } from '../hooks/useTableSortPending';
 
 interface ProjectRow {
   name: string;
@@ -34,6 +36,13 @@ export default function ProjectsView() {
   const [validationMessage, setValidationMessage] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('name');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  const { isTableSortPending, queueTableSort, clearTableSortPending } = useTableSortPending();
+
+  useEffect(() => {
+    if (isTableSortPending) {
+      clearTableSortPending();
+    }
+  }, [clearTableSortPending, isTableSortPending, sortDirection, sortKey]);
 
   const projectRows = useMemo<ProjectRow[]>(() => {
     const projectMembers = new Map<
@@ -108,13 +117,15 @@ export default function ProjectsView() {
   }, [rawResponses, resolvePersonName, sortDirection, sortKey]);
 
   const toggleSort = (nextSortKey: SortKey) => {
-    if (sortKey === nextSortKey) {
-      setSortDirection((currentDirection) => (currentDirection === 'asc' ? 'desc' : 'asc'));
-      return;
-    }
+    queueTableSort(() => {
+      if (sortKey === nextSortKey) {
+        setSortDirection((currentDirection) => (currentDirection === 'asc' ? 'desc' : 'asc'));
+        return;
+      }
 
-    setSortKey(nextSortKey);
-    setSortDirection(nextSortKey === 'peopleAssigned' ? 'asc' : 'asc');
+      setSortKey(nextSortKey);
+      setSortDirection('asc');
+    });
   };
 
   const resetEditingState = () => {
@@ -146,7 +157,15 @@ export default function ProjectsView() {
       return;
     }
 
+    const editedProject = projectRows.find((project) => project.name === editingProjectName);
+
     renameProject(editingProjectName, sanitizedDraftProjectName);
+    trackEvent('projects_project_renamed', {
+      page: 'projects',
+      people_assigned_count: editedProject?.peopleAssigned,
+      previous_name_length: editingProjectName.length,
+      next_name_length: sanitizedDraftProjectName.length,
+    });
     resetEditingState();
   };
 
@@ -184,7 +203,9 @@ export default function ProjectsView() {
                   className="inline-flex items-center gap-1 transition-colors hover:text-[#111827]"
                 >
                   People Assigned
-                  {sortKey === 'peopleAssigned' ? (
+                  {isTableSortPending && sortKey === 'peopleAssigned' ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : sortKey === 'peopleAssigned' ? (
                     sortDirection === 'asc' ? (
                       <ArrowUp className="h-3.5 w-3.5" />
                     ) : (

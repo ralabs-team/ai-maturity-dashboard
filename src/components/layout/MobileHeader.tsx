@@ -1,11 +1,12 @@
 import { Link } from 'react-router-dom';
-import { Sparkles } from 'lucide-react';
+import { Pencil, Sparkles } from 'lucide-react';
 import { SidebarTrigger } from '../ui/sidebar';
 import { useWorkspaceIdentity } from '../../data/workspace/WorkspaceIdentityContext';
 import { useSurveyData } from '../../data/survey/SurveyDataContext';
+import { trackEvent } from '../../lib/amplitude';
 
 export default function MobileHeader() {
-  const { workspaceName } = useWorkspaceIdentity();
+  const { workspaceName, openWorkspaceIdentityModal } = useWorkspaceIdentity();
   const { hasResponseData } = useSurveyData();
 
   return (
@@ -25,6 +26,19 @@ export default function MobileHeader() {
           </div>
         </div>
       </Link>
+      <button
+        type="button"
+        aria-label="Edit workspace settings"
+        onClick={() => {
+          trackEvent('workspace_name_edit_clicked', {
+            source: 'mobile_header',
+          });
+          openWorkspaceIdentityModal();
+        }}
+        className="ml-auto inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[var(--sidebar-border)] bg-[var(--background)] text-[var(--sidebar-muted)] transition hover:bg-[var(--sidebar-accent)] hover:text-[var(--sidebar-foreground)]"
+      >
+        <Pencil className="h-4 w-4" strokeWidth={2} />
+      </button>
     </header>
   );
 }

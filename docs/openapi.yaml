@@ -1,0 +1,124 @@
+openapi: 3.1.0
+info:
+  title: Pragmatiq App API
+  version: 1.0.0
+servers:
+  - url: https://app.pragmatiq.ai
+paths:
+  /api/ask-ai:
+    post:
+      summary: Answer a dashboard question from a scoped AI research pack
+      requestBody:
+        required: true
+      responses:
+        "200":
+          description: Ask AI answer
+  /api/session:
+    get:
+      summary: Resolve the active app session
+      responses:
+        "200":
+          description: Active session
+  /api/workspace:
+    get:
+      summary: Resolve the active workspace context
+      responses:
+        "200":
+          description: Workspace metadata
+  /api/surveys:
+    get:
+      summary: List available survey definitions for the app
+      responses:
+        "200":
+          description: Survey definition list
+  /api/surveys/uploads:
+    post:
+      summary: Upload a survey CSV payload for ingestion
+      requestBody:
+        required: true
+      responses:
+        "200":
+          description: Upload result
+  /api/surveys/responses:
+    get:
+      summary: List stored survey responses for dashboard analysis
+      responses:
+        "200":
+          description: Survey response list
+  /api/workspaces/{workspaceId}/surveys/{surveyId}:
+    get:
+      summary: Resolve survey metadata for a workspace survey
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: surveyId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Survey definition
+  /api/survey-links/{linkId}:
+    get:
+      summary: Resolve a public survey link token
+      parameters:
+        - in: path
+          name: linkId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Link state and survey metadata
+  /api/survey-responses:
+    post:
+      summary: Submit a completed survey response
+      requestBody:
+        required: true
+      responses:
+        "200":
+          description: Submission result
+  /api/dashboard/summary:
+    get:
+      summary: Resolve dashboard summary metrics
+      responses:
+        "200":
+          description: Summary metrics
+  /api/dashboard/team-insights:
+    get:
+      summary: Resolve scoped team insight metrics and narrative support
+      parameters:
+        - in: query
+          name: scopeType
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: scopeId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Team insights payload
+  /api/dashboard/goal-recommendations:
+    get:
+      summary: Resolve scoped goal recommendations for the dashboard
+      parameters:
+        - in: query
+          name: scopeType
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: scopeId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Goal recommendation list

@@ -25,7 +25,7 @@ export const SURVEYS: SurveyCardMeta[] = [
     id: 'business',
     title: 'AI Score - Business Survey',
     description:
-    'Measures how business teams apply AI across planning, communication, analysis, and execution, with a focus on adoption habits, judgment, real work impact, and forward-looking AI opportunities.',
+      'Measures how business teams apply AI across planning, communication, analysis, and execution, with a focus on adoption habits, judgment, real work impact, and forward-looking AI opportunities.',
     googleFormUrl: 'https://docs.google.com/forms/d/1gtc9OlHvREEbrKRq0aJ7DHJWP1nfnbuDRGEgg2mRqzA/edit',
     updatedAt: '2026-05-09T11:24:39',
     questionCountLabel: '56 questions',

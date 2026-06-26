@@ -1,4 +1,5 @@
-import { ArrowDown } from 'lucide-react';
+import { ArrowDown, CircleHelp } from 'lucide-react';
+import { AskAiTriggerButton } from '../ai/AskAiSidebar';
 import { LEVEL_LABELS, type MaturityLevel } from '../../data/types';
 import { Tooltip as InfoTooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
 import TeamSectionHeader from './TeamSectionHeader';
@@ -12,10 +13,14 @@ type TeamSummarySectionProps = {
   selectedTeamResponseCount: number;
   aiChampionCount: number;
   aiChampionShare: number;
+  resistanceScore: number;
+  resistanceRespondentCount: number;
+  highResistanceShare: number;
+  resistanceHelpText: string;
   isPreparingAiResearchPack: boolean;
   onDownloadAiResearchPack: () => void;
+  onOpenAskAi: () => void;
   onJumpToAiChampions: () => void;
-  onOpenExternalAi: (url: string) => void;
 };
 
 export default function TeamSummarySection({
@@ -26,10 +31,14 @@ export default function TeamSummarySection({
   selectedTeamResponseCount,
   aiChampionCount,
   aiChampionShare,
+  resistanceScore,
+  resistanceRespondentCount,
+  highResistanceShare,
+  resistanceHelpText,
   isPreparingAiResearchPack,
   onDownloadAiResearchPack,
+  onOpenAskAi,
   onJumpToAiChampions,
-  onOpenExternalAi,
 }: TeamSummarySectionProps) {
   return (
     <section id="team-top-summary" className="mt-8 scroll-mt-24">
@@ -38,7 +47,7 @@ export default function TeamSummarySection({
         subtitle={`Fast-read ${scopeLabelLower} signals for maturity, movement, participation, and concentration of stronger adopters.`}
       />
 
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
+      <div className="flex flex-wrap gap-3">
         {[
           {
             title: 'Overall maturity',
@@ -47,14 +56,19 @@ export default function TeamSummarySection({
             hoverValue: `${selectedTeamOverallScore.toFixed(2)} / 5`,
           },
           {
-            title: 'Responses',
-            value: String(selectedTeamResponseCount),
-            detail: 'Survey responses',
-          },
-          {
             title: 'Level 4–5 people',
             value: String(selectedTeamLevel45Count),
             detail: `${formatPercent((selectedTeamLevel45Count / Math.max(selectedTeamResponseCount, 1)) * 100)} of team at advanced maturity`,
+          },
+          {
+            title: 'Resistance score',
+            value: formatScore(resistanceScore),
+            detail:
+              resistanceRespondentCount > 0
+                ? `Lower is better; ${formatPercent(highResistanceShare)} show strong resistance signals`
+                : 'Lower is better; no scored responses yet',
+            hoverValue: `${resistanceScore.toFixed(2)} / 5`,
+            helpText: resistanceHelpText,
           },
           {
             title: 'AI champions',
@@ -69,7 +83,7 @@ export default function TeamSummarySection({
             type="button"
             key={card.title}
             onClick={card.onClick}
-            className={`flex min-h-[126px] flex-col rounded-2xl shadow-sm ${
+            className={`w-full sm:w-[260px] flex min-h-[126px] flex-col rounded-2xl shadow-sm ${
               index === 0
                 ? 'border border-[#1d4ed8]/20 bg-[linear-gradient(135deg,#0f766e_0%,#1d4ed8_100%)] px-5 py-4 text-white'
                 : 'border border-[#eaeaea] bg-white px-4 py-3'
@@ -82,6 +96,31 @@ export default function TeamSummarySection({
             >
               <span className="inline-flex items-center gap-1.5">
                 {card.title}
+                {card.helpText ? (
+                  <InfoTooltip>
+                    <TooltipTrigger asChild>
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        onClick={(event) => event.stopPropagation()}
+                        onKeyDown={(event) => event.stopPropagation()}
+                        className={`inline-flex h-4 w-4 items-center justify-center rounded-full ${
+                          index === 0 ? 'text-white/75' : 'text-[#9ca3af]'
+                        }`}
+                        aria-label={`About ${card.title}`}
+                      >
+                        <CircleHelp className="h-3.5 w-3.5" />
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent
+                      side="top"
+                      sideOffset={8}
+                      className="max-w-[260px] px-3 py-2 text-[12px] leading-relaxed"
+                    >
+                      <div className="text-white">{card.helpText}</div>
+                    </TooltipContent>
+                  </InfoTooltip>
+                ) : null}
                 {card.onClick ? (
                   <ArrowDown className={`h-3 w-3 ${index === 0 ? 'text-white/70' : 'text-[#9ca3af]'}`} />
                 ) : null}
@@ -135,39 +174,20 @@ export default function TeamSummarySection({
               research pack for ChatGPT or Claude
             </h3>
             <p className="mt-2 text-sm leading-6 text-[#667085]">
-              Export a markdown brief with survey context, organization snapshot, raw dimension
-              scores for individuals, departments, and projects, plus question-level responses.
+              Ask questions in the sidebar or download a markdown brief with survey context,
+              organization snapshot, raw dimension scores for individuals, departments, and
+              projects, plus question-level responses.
             </p>
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
-            <button
-              type="button"
-              onClick={() =>
-                onOpenExternalAi(
-                  'https://chatgpt.com/g/g-6a1748e9d82c81918cc004536a458297-ai-maturity-index-analyst',
-                )
-              }
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-[#e5e7eb] bg-white px-4 text-sm font-semibold text-[#242424] transition hover:border-[#d4d4d8] hover:bg-[#f8f8f9] focus:outline-none focus:ring-[3px] focus:ring-[#c7c7cc]/25"
-            >
-              <img src="/chatgpt-logo.svg" alt="" aria-hidden="true" className="h-4 w-4" />
-              Open ChatGPT
-            </button>
-
-            <button
-              type="button"
-              onClick={() => onOpenExternalAi('https://claude.ai/')}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-[#e5e7eb] bg-white px-4 text-sm font-semibold text-[#242424] transition hover:border-[#d4d4d8] hover:bg-[#f8f8f9] focus:outline-none focus:ring-[3px] focus:ring-[#c7c7cc]/25"
-            >
-              <img src="/claude-logo.png" alt="" aria-hidden="true" className="h-4 w-4" />
-              Open Claude
-            </button>
+            <AskAiTriggerButton onClick={onOpenAskAi} />
 
             <button
               type="button"
               onClick={onDownloadAiResearchPack}
               disabled={isPreparingAiResearchPack}
-              className="inline-flex h-11 items-center justify-center rounded-2xl border border-[#d4d4d8] bg-[#f5f5f5] px-5 text-sm font-semibold text-[#3f3f46] transition hover:border-[#c4c4c7] hover:bg-[#ededee] focus:outline-none focus:ring-[3px] focus:ring-[#c7c7cc]/25 disabled:cursor-wait disabled:opacity-70"
+              className="inline-flex h-11 cursor-pointer items-center justify-center rounded-2xl border border-[#d4d4d8] bg-[#f5f5f5] px-5 text-sm font-semibold text-[#3f3f46] transition hover:border-[#c4c4c7] hover:bg-[#ededee] focus:outline-none focus:ring-[3px] focus:ring-[#c7c7cc]/25 disabled:cursor-wait disabled:opacity-70"
             >
               {isPreparingAiResearchPack ? 'Preparing AI research pack...' : 'Download AI research pack'}
             </button>

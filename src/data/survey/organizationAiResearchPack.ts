@@ -1,4 +1,11 @@
 import { LEVEL_LABELS, scoreToLevel, TECH_DIMENSIONS, type Individual } from '../types';
+import type {
+  AskAiIndividualScoreRow,
+  AskAiQuestionLevelResponseRow,
+  AskAiQuestionRow,
+  AskAiResearchPack,
+  AskAiStructuredContext,
+} from '../../shared/api/askAi';
 import { getOpenQuestionsForSurveyType, getQuestionsForSurveyType } from './questions';
 import type { RawResponse } from './scoring';
 
@@ -18,14 +25,8 @@ type BuildOrganizationAiResearchPackArgs = {
   individuals: Individual[];
   rawResponses: RawResponse[];
   resolvePersonName: (username: string) => string;
-};
-
-type OrganizationAiResearchPack = {
-  filename: string;
-  markdown: string;
-  metadata?: {
-    projectAliasesByName?: Record<string, string>;
-  };
+  scopeType?: Exclude<AskAiStructuredContext['scopeType'], 'individual'>;
+  scopeLabel?: string;
 };
 
 type AliasMaps = {
@@ -35,11 +36,13 @@ type AliasMaps = {
 
 type ReferenceTable = {
   idsByValue: Map<string, string>;
+  entries: Array<{ ref: string; value: string }>;
   rows: string[];
 };
 
 type QuestionReference = {
   refId: string;
+  surveyType: RawResponse['surveyType'];
   surveyTypeLabel: string;
   questionNumber: string;
   dimension: string;
@@ -49,6 +52,7 @@ type QuestionReference = {
 
 type QuestionReferenceTable = {
   refsByKey: Map<string, QuestionReference>;
+  entries: QuestionReference[];
   rows: string[];
 };
 
@@ -121,6 +125,7 @@ function createReferenceTable(
     new Set(values.map((value) => sanitizeWhitespace(value)).filter(Boolean)),
   ).sort((left, right) => left.localeCompare(right));
   const idsByValue = new Map<string, string>();
+  const entries: Array<{ ref: string; value: string }> = [];
   const rows = [
     `| ${prefix} ID | ${valueLabel} |`,
     '|---|---|',
@@ -129,11 +134,13 @@ function createReferenceTable(
   uniqueValues.forEach((value, index) => {
     const refId = `${prefix}${String(index + 1).padStart(2, '0')}`;
     idsByValue.set(value, refId);
+    entries.push({ ref: refId, value });
     rows.push(`| ${refId} | ${escapeMarkdownCell(value)} |`);
   });
 
   return {
     idsByValue,
+    entries,
     rows,
   };
 }
@@ -144,6 +151,7 @@ function createFixedReferenceTable(
   valueLabel: string,
 ): ReferenceTable {
   const idsByValue = new Map<string, string>();
+  const referenceEntries: Array<{ ref: string; value: string }> = [];
   const rows = [
     `| ${idLabel} | ${valueLabel} |`,
     '|---|---|',
@@ -152,11 +160,13 @@ function createFixedReferenceTable(
   for (const entry of entries) {
     const normalizedValue = sanitizeWhitespace(entry.value);
     idsByValue.set(normalizedValue, entry.id);
+    referenceEntries.push({ ref: entry.id, value: normalizedValue });
     rows.push(`| ${entry.id} | ${escapeMarkdownCell(normalizedValue)} |`);
   }
 
   return {
     idsByValue,
+    entries: referenceEntries,
     rows,
   };
 }
@@ -409,6 +419,7 @@ function buildProjectRows(individuals: Individual[]): ScopeScoresRow[] {
 
 function buildQuestionReferenceTable(): QuestionReferenceTable {
   const refsByKey = new Map<string, QuestionReference>();
+  const entries: QuestionReference[] = [];
   const rows = [
     '| Question Ref | Survey Type | Question Number | Dimension | Question |',
     '|---|---|---|---|---|',
@@ -438,6 +449,7 @@ function buildQuestionReferenceTable(): QuestionReferenceTable {
           : 'Open';
       const ref = {
         refId,
+        surveyType: definition.surveyType,
         surveyTypeLabel: definition.surveyTypeLabel,
         questionNumber: question.number,
         dimension,
@@ -446,6 +458,7 @@ function buildQuestionReferenceTable(): QuestionReferenceTable {
       };
 
       refsByKey.set(questionReferenceKey(definition.surveyType, String(question.id)), ref);
+      entries.push(ref);
       rows.push(
         `| ${refId} | ${definition.surveyTypeLabel} | ${escapeMarkdownCell(question.number)} | ${escapeMarkdownCell(ref.dimension)} | ${escapeMarkdownCell(question.text)} |`,
       );
@@ -453,6 +466,7 @@ function buildQuestionReferenceTable(): QuestionReferenceTable {
   }
 
   return {
+    entries,
     refsByKey,
     rows,
   };
@@ -645,11 +659,148 @@ function buildScopeRows(
   return rows;
 }
 
+function buildMethodology(): AskAiStructuredContext['methodology'] {
+  const businessQuestionCount =
+    getQuestionsForSurveyType('business').length + getOpenQuestionsForSurveyType('business').length;
+  const deliveryQuestionCount =
+    getQuestionsForSurveyType('delivery-engineering').length +
+    getOpenQuestionsForSurveyType('delivery-engineering').length;
+
+  return {
+    overview: [
+      'The AI Maturity Index is a survey-based assessment of how AI is being adopted across a selected scope.',
+      'It measures five core dimensions: Usage, Skills, Impact, Culture, and Vision.',
+      'Scores are reported on a 1.0 to 5.0 scale, with higher values indicating stronger maturity.',
+      'The exported context is anonymized and is intended to support evidence-based analysis rather than narrative-only interpretation.',
+      'The data includes scored respondents, aggregate department and project views, and question-level responses.',
+    ].join('\n'),
+    levels: [
+      'Level 1 - Observer: score range 1.0-1.4. AI exposure is minimal, inconsistent, and not yet part of normal work.',
+      'Level 2 - Explorer: score range 1.5-2.4. People are experimenting, but adoption is still fragmented and opportunistic.',
+      'Level 3 - Practitioner: score range 2.5-3.4. AI is producing repeatable value in real work, but it is not yet broadly embedded.',
+      'Level 4 - Orchestrator: score range 3.5-4.4. AI is integrated into workflows, shared practices, and team-level operating habits.',
+      'Level 5 - Native: score range 4.5-5.0. AI is deeply embedded in how work is designed, delivered, and improved.',
+    ].join('\n'),
+    surveys: [
+      `Business survey: ${businessQuestionCount} total questions, covering non-engineering and business-facing roles.`,
+      `Delivery & engineering survey: ${deliveryQuestionCount} total questions, covering product, delivery, and technical roles.`,
+      'Both surveys roll up into the same five maturity dimensions so cross-scope comparisons stay consistent.',
+      'Question references identify the survey type, question number, dimension, and prompt text for each response row.',
+    ].join('\n'),
+  };
+}
+
+function buildStructuredScopeScores(
+  rowsData: ScopeScoresRow[],
+  resolveRef: (row: ScopeScoresRow) => string,
+): AskAiStructuredContext['departmentScores'] {
+  return rowsData.map((row) => ({
+    ref: resolveRef(row),
+    respondents: row.respondents,
+    overall: row.overall,
+    level: formatLevel(row.level),
+    scores: row.scores,
+  }));
+}
+
+function buildStructuredIndividualScores(
+  individuals: Individual[],
+  aliasMaps: AliasMaps,
+  peopleReferences: ReferenceTable,
+  departmentReferences: ReferenceTable,
+  seniorityReferences: ReferenceTable,
+  projectReferences: ReferenceTable,
+  surveyTypeReferences: ReferenceTable,
+): AskAiIndividualScoreRow[] {
+  return [...individuals]
+    .sort(
+      (left, right) =>
+        left.name.localeCompare(right.name) || left.department.localeCompare(right.department),
+    )
+    .map((person) => ({
+      personRef:
+        peopleReferences.idsByValue.get(anonymizePersonName(person.name, aliasMaps.people)) ?? '-',
+      surveyTypeRef:
+        surveyTypeReferences.idsByValue.get(
+          person.surveyType === 'business' ? 'Business' : 'Delivery & engineering',
+        ) ?? '-',
+      departmentRef:
+        departmentReferences.idsByValue.get(sanitizeWhitespace(person.department)) ?? '-',
+      seniorityRef:
+        seniorityReferences.idsByValue.get(sanitizeWhitespace(person.seniority)) ?? '-',
+      projectRefs: person.allProjects
+        .map(
+          (project) =>
+            projectReferences.idsByValue.get(anonymizeProjectName(project, aliasMaps.projects)) ?? '-',
+        )
+        .filter((projectRef) => projectRef !== '-'),
+      overall: person.overallScore,
+      level: formatLevel(person.overallLevel),
+      scores: person.scores,
+    }));
+}
+
+function buildStructuredQuestionLevelResponses(
+  rawResponses: RawResponse[],
+  resolvePersonName: (username: string) => string,
+  aliasMaps: AliasMaps,
+  questionReferences: QuestionReferenceTable,
+  peopleReferences: ReferenceTable,
+  surveyTypeReferences: ReferenceTable,
+  answerReferences: ReferenceTable,
+): AskAiQuestionLevelResponseRow[] {
+  const rows: AskAiQuestionLevelResponseRow[] = [];
+
+  for (const response of rawResponses) {
+    const questions = [
+      ...getQuestionsForSurveyType(response.surveyType),
+      ...getOpenQuestionsForSurveyType(response.surveyType),
+    ];
+    const personAlias = anonymizePersonName(resolvePersonName(response.username), aliasMaps.people);
+    const surveyTypeLabel =
+      response.surveyType === 'business' ? 'Business' : 'Delivery & engineering';
+    const personRef = peopleReferences.idsByValue.get(personAlias) ?? '-';
+    const surveyTypeRef = surveyTypeReferences.idsByValue.get(surveyTypeLabel) ?? '-';
+
+    for (const question of questions) {
+      const answer = response[question.id as keyof RawResponse];
+
+      if (typeof answer !== 'string' || sanitizeWhitespace(answer) === '') {
+        continue;
+      }
+
+      const questionRef = questionReferences.refsByKey.get(
+        questionReferenceKey(response.surveyType, String(question.id)),
+      );
+
+      if (!questionRef) {
+        continue;
+      }
+
+      const redactedAnswer = redactAnswerText(answer, aliasMaps);
+
+      rows.push({
+        personRef,
+        surveyTypeRef,
+        questionRef: questionRef.refId,
+        answerRef: questionRef.isOpen
+          ? null
+          : answerReferences.idsByValue.get(redactedAnswer) ?? null,
+        rawAnswer: questionRef.isOpen ? redactedAnswer : null,
+      });
+    }
+  }
+
+  return rows;
+}
+
 export function buildOrganizationAiResearchPack({
   individuals,
   rawResponses,
   resolvePersonName,
-}: BuildOrganizationAiResearchPackArgs): OrganizationAiResearchPack {
+  scopeType = 'organization',
+  scopeLabel = 'Current scope',
+}: BuildOrganizationAiResearchPackArgs): AskAiResearchPack {
   const aliasMaps = createAliasMaps(individuals, rawResponses, resolvePersonName);
   const departmentRows = buildDepartmentRows(individuals);
   const projectRows = buildProjectRows(individuals);
@@ -699,6 +850,97 @@ export function buildOrganizationAiResearchPack({
   const level45ProjectCount = projectRows.filter((project) => scoreToLevel(project.overall) >= 4).length;
   const level45ProjectShare =
     projectRows.length > 0 ? (level45ProjectCount / projectRows.length) * 100 : 0;
+  const levelDistributionCounts = new Map<number, number>([
+    [1, 0],
+    [2, 0],
+    [3, 0],
+    [4, 0],
+    [5, 0],
+  ]);
+
+  for (const person of individuals) {
+    levelDistributionCounts.set(
+      person.overallLevel,
+      (levelDistributionCounts.get(person.overallLevel) ?? 0) + 1,
+    );
+  }
+
+  const aiContext: AskAiStructuredContext = {
+    version: 'v1',
+    scopeType,
+    scopeLabel,
+    methodology: buildMethodology(),
+    snapshot: {
+      overallScore: roundToOne(overallScore),
+      maturityLevel: formatLevel(overallLevel),
+      respondentCount,
+      totalProjects: projectRows.length,
+      level45PeopleShare: roundToOne(level45PeopleShare),
+      level45ProjectShare: roundToOne(level45ProjectShare),
+      dimensionAverages: TECH_DIMENSIONS.reduce(
+        (acc, dimension) => ({
+          ...acc,
+          [dimension]: roundToOne(average(individuals.map((person) => person.scores[dimension]))),
+        }),
+        {} as AskAiStructuredContext['snapshot']['dimensionAverages'],
+      ),
+      levelDistribution: [1, 2, 3, 4, 5].map((level) => {
+        const count = levelDistributionCounts.get(level) ?? 0;
+        return {
+          level: formatLevel(level),
+          count,
+          share: roundToOne(respondentCount > 0 ? (count / respondentCount) * 100 : 0),
+        };
+      }),
+    },
+    people: peopleReferences.entries,
+    surveyTypes: surveyTypeReferences.entries,
+    departments: departmentReferences.entries,
+    seniorities: seniorityReferences.entries,
+    projects: projectReferences.entries,
+    questions: questionReferences.entries.map<AskAiQuestionRow>((question) => ({
+      questionRef: question.refId,
+      surveyType: question.surveyType ?? 'delivery-engineering',
+      surveyTypeLabel: question.surveyTypeLabel,
+      questionNumber: question.questionNumber,
+      dimension: question.dimension,
+      text: question.text,
+      isOpen: question.isOpen,
+    })),
+    answers: answerReferences.entries.map(({ ref, value }) => ({
+      answerRef: ref,
+      answer: value,
+    })),
+    departmentScores: buildStructuredScopeScores(
+      departmentRows,
+      (row) => departmentReferences.idsByValue.get(sanitizeWhitespace(row.name)) ?? '-',
+    ),
+    projectScores: buildStructuredScopeScores(
+      projectRows,
+      (row) =>
+        projectReferences.idsByValue.get(
+          anonymizeProjectName(row.name, aliasMaps.projects),
+        ) ?? '-',
+    ),
+    individualScores: buildStructuredIndividualScores(
+      individuals,
+      aliasMaps,
+      peopleReferences,
+      departmentReferences,
+      seniorityReferences,
+      projectReferences,
+      surveyTypeReferences,
+    ),
+    questionLevelResponses: buildStructuredQuestionLevelResponses(
+      rawResponses,
+      resolvePersonName,
+      aliasMaps,
+      questionReferences,
+      peopleReferences,
+      surveyTypeReferences,
+      answerReferences,
+    ),
+  };
 
   const lines = [
     '# AI Maturity Research Pack',
@@ -828,5 +1070,6 @@ export function buildOrganizationAiResearchPack({
     metadata: {
       projectAliasesByName: Object.fromEntries(aliasMaps.projects),
     },
+    aiContext,
   };
 }

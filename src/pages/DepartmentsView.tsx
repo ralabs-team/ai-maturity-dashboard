@@ -1,11 +1,13 @@
-import { useMemo, useState, type KeyboardEvent } from 'react';
-import { ArrowDown, ArrowUp, ArrowUpDown, Check, Pencil, X } from 'lucide-react';
+import { useEffect, useMemo, useState, type KeyboardEvent } from 'react';
+import { ArrowDown, ArrowUp, ArrowUpDown, Check, Loader2, Pencil, X } from 'lucide-react';
 import PageHeader from '../components/layout/PageHeader';
 import { useSensitiveData } from '../components/privacy/SensitiveDataContext';
 import PersonAvatar from '../components/ui/PersonAvatar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip';
 import { useSurveyData } from '../data/survey/SurveyDataContext';
 import { allDepartmentsList } from '../data/survey/scoring';
+import { trackEvent } from '../lib/amplitude';
+import { useTableSortPending } from '../hooks/useTableSortPending';
 
 interface DepartmentRow {
   name: string;
@@ -32,6 +34,13 @@ export default function DepartmentsView() {
   const [validationMessage, setValidationMessage] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('name');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  const { isTableSortPending, queueTableSort, clearTableSortPending } = useTableSortPending();
+
+  useEffect(() => {
+    if (isTableSortPending) {
+      clearTableSortPending();
+    }
+  }, [clearTableSortPending, isTableSortPending, sortDirection, sortKey]);
 
   const departmentRows = useMemo<DepartmentRow[]>(() => {
     const departmentMembers = new Map<
@@ -102,13 +111,15 @@ export default function DepartmentsView() {
   }, [rawResponses, resolvePersonName, sortDirection, sortKey]);
 
   const toggleSort = (nextSortKey: SortKey) => {
-    if (sortKey === nextSortKey) {
-      setSortDirection((currentDirection) => (currentDirection === 'asc' ? 'desc' : 'asc'));
-      return;
-    }
+    queueTableSort(() => {
+      if (sortKey === nextSortKey) {
+        setSortDirection((currentDirection) => (currentDirection === 'asc' ? 'desc' : 'asc'));
+        return;
+      }
 
-    setSortKey(nextSortKey);
-    setSortDirection(nextSortKey === 'peopleAssigned' ? 'asc' : 'asc');
+      setSortKey(nextSortKey);
+      setSortDirection('asc');
+    });
   };
 
   const resetEditingState = () => {
@@ -140,7 +151,15 @@ export default function DepartmentsView() {
       return;
     }
 
+    const editedDepartment = departmentRows.find((department) => department.name === editingDepartmentName);
+
     renameDepartment(editingDepartmentName, sanitizedDraftDepartmentName);
+    trackEvent('departments_department_renamed', {
+      page: 'departments',
+      people_assigned_count: editedDepartment?.peopleAssigned,
+      previous_name_length: editingDepartmentName.length,
+      next_name_length: sanitizedDraftDepartmentName.length,
+    });
     resetEditingState();
   };
 
@@ -178,7 +197,9 @@ export default function DepartmentsView() {
                   className="inline-flex items-center gap-1 transition-colors hover:text-[#111827]"
                 >
                   People Assigned
-                  {sortKey === 'peopleAssigned' ? (
+                  {isTableSortPending && sortKey === 'peopleAssigned' ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : sortKey === 'peopleAssigned' ? (
                     sortDirection === 'asc' ? (
                       <ArrowUp className="h-3.5 w-3.5" />
                     ) : (

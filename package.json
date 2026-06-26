@@ -1,5 +1,5 @@
 {
-  "name": "ai-maturity-dashboard",
+  "name": "pragmatiq-app",
   "private": true,
   "version": "1.0.15",
   "type": "module",
@@ -10,13 +10,16 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@amplitude/unified": "^1.1.9",
     "@radix-ui/react-collapsible": "^1.1.12",
     "@radix-ui/react-tooltip": "^1.2.8",
     "lucide-react": "^1.8.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
+    "react-markdown": "^10.1.0",
     "react-router-dom": "^7.14.0",
-    "recharts": "^3.8.1"
+    "recharts": "^3.8.1",
+    "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",

@@ -8,6 +8,7 @@ import {
   XAxis,
   YAxis,
 } from '../recharts';
+import { SensitiveAxisTick, SensitiveTooltipLabel } from '../../ui/SensitiveChartText';
 
 type Row = {
   name: string;
@@ -16,6 +17,40 @@ type Row = {
   current: number;
   delta: number;
 };
+
+function DepartmentMaturityTooltip({
+  active,
+  payload,
+}: {
+  active?: boolean;
+  payload?: Array<{ dataKey?: string; value?: number; payload?: Row }>;
+}) {
+  const point = payload?.[0]?.payload;
+
+  if (!active || !point) {
+    return null;
+  }
+
+  return (
+    <div className="rounded-md bg-[#242424] px-4 py-3 text-sm text-white shadow-lg">
+      <SensitiveTooltipLabel
+        prefix="Department"
+        value={point.name}
+        className="mb-2 font-semibold text-white"
+      />
+      <div className="space-y-1">
+        {payload?.map((entry) => (
+          <div key={String(entry.dataKey)}>
+            {entry.dataKey === 'current' ? 'Current' : 'Previous'}:{' '}
+            {typeof entry.value === 'number' ? `${entry.value.toFixed(1)} / 5` : '-'}
+          </div>
+        ))}
+        <div>Respondents: {point.respondents}</div>
+        <div>Delta: {point.delta.toFixed(1)}</div>
+      </div>
+    </div>
+  );
+}
 
 export default function DepartmentMaturityMovementCard({
   rows,
@@ -50,20 +85,20 @@ export default function DepartmentMaturityMovementCard({
               dataKey="name"
               type="category"
               width={150}
-              tick={{ fontSize: 12, fill: '#525252' }}
+              tick={
+                <SensitiveAxisTick
+                  fill="#525252"
+                  fontSize={12}
+                  textAnchor="end"
+                  dy={4}
+                />
+              }
               axisLine={false}
               tickLine={false}
             />
             <Tooltip
               isAnimationActive={false}
-              formatter={(value, _name, entry) => [
-                typeof value === 'number' ? `${value.toFixed(1)} / 5` : String(value ?? '-'),
-                String(entry?.dataKey) === 'current' ? 'Current' : 'Previous',
-              ]}
-              labelFormatter={(label, payload) => {
-                const point = payload?.[0]?.payload as Row | undefined;
-                return `${label} · ${point?.respondents ?? 0} respondents · ${point?.delta.toFixed(1) ?? '0.0'} delta`;
-              }}
+              content={<DepartmentMaturityTooltip />}
             />
             <Legend iconType="circle" />
             <Bar dataKey="previous" name="Previous wave" fill="#cbd5e1" radius={[0, 8, 8, 0]} />

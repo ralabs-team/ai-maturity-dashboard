@@ -1,0 +1,7 @@
+interface:
+  display_name: "Post-Feature Review"
+  short_description: "Review finished changes before final reply"
+  default_prompt: "Use $post-feature-review after implementation and before the final response."
+
+policy:
+  allow_implicit_invocation: true

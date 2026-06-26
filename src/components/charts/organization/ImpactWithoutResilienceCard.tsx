@@ -11,6 +11,8 @@ import {
   YAxis,
   ZAxis,
 } from '../recharts';
+import ChartFeedback from '../../analytics/ChartFeedback';
+import { SensitiveTooltipLabel } from '../../ui/SensitiveChartText';
 
 type Scope = 'department' | 'team';
 type Row = {
@@ -35,9 +37,11 @@ function TooltipContent({
 
   return (
     <div className="rounded-md bg-[#242424] px-4 py-3 text-sm text-white shadow-lg">
-      <div className="mb-2 font-semibold text-white">
-        {scope === 'department' ? 'Department' : 'Team'}: {point.name}
-      </div>
+      <SensitiveTooltipLabel
+        prefix={scope === 'department' ? 'Department' : 'Team'}
+        value={point.name}
+        className="mb-2 font-semibold text-white"
+      />
       <div className="space-y-1">
         <div>Dependency on AI: {point.dependency.toFixed(1)} / 5</div>
         <div>Practice resilience: {point.resilience.toFixed(1)} / 5</div>
@@ -58,7 +62,8 @@ export default function ImpactWithoutResilienceCard({
   const rows = scope === 'department' ? departmentRows : teamRows;
 
   return (
-    <section className="rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
+    <section className="group relative rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
+      <ChartFeedback chartTitle="Impact without resilience" page="organization" />
       <h3 className="text-lg font-semibold tracking-tight text-[#242424]">
         Impact without resilience
       </h3>
@@ -83,7 +88,19 @@ export default function ImpactWithoutResilienceCard({
         ))}
       </div>
 
-      <div className="mt-6 h-[340px]">
+      <div className="relative mt-6 h-[340px]">
+        <div className="pointer-events-none absolute left-4 top-3 z-10 rounded-full bg-white/90 px-3 py-1 text-[11px] font-medium text-[#475569] shadow-sm ring-1 ring-[#e5e7eb]">
+          Low dependency + high resilience
+        </div>
+        <div className="pointer-events-none absolute right-4 top-3 z-10 rounded-full bg-white/90 px-3 py-1 text-[11px] font-medium text-[#475569] shadow-sm ring-1 ring-[#e5e7eb]">
+          High dependency + high resilience
+        </div>
+        <div className="pointer-events-none absolute bottom-9 left-4 z-10 rounded-full bg-white/90 px-3 py-1 text-[11px] font-medium text-[#475569] shadow-sm ring-1 ring-[#e5e7eb]">
+          Low dependency + low resilience
+        </div>
+        <div className="pointer-events-none absolute bottom-9 right-4 z-10 rounded-full bg-white/90 px-3 py-1 text-[11px] font-medium text-[#475569] shadow-sm ring-1 ring-[#e5e7eb]">
+          High dependency + low resilience
+        </div>
         <ResponsiveContainer width="100%" height="100%">
           <ScatterChart margin={{ top: 10, right: 12, left: 0, bottom: 18 }}>
             <CartesianGrid stroke="#ececec" strokeDasharray="3 3" />

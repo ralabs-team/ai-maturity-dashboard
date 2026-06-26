@@ -1,3 +1,7 @@
+import type { IndividualArchetypeProfile } from '../../data/survey/individualArchetypes';
+import type { TeamArchetypeProfile } from '../../data/survey/teamArchetypes';
+import type { AskAiResearchPack } from '../../shared/api/askAi';
+
 export type TeamDimension = 'Usage' | 'Skills' | 'Impact' | 'Culture' | 'Vision';
 export type TeamMapDimension =
   | 'Usage'
@@ -37,6 +41,7 @@ export type TeamRecord = {
   color: string;
   clientValue: number;
   clientTrust: number;
+  archetype?: TeamArchetypeProfile;
 };
 
 export type TeamMemberRecord = {
@@ -45,19 +50,20 @@ export type TeamMemberRecord = {
   overall: number;
   level: string;
   levelNumber?: number;
+  archetype?: IndividualArchetypeProfile;
   dimensions: Record<TeamMapDimension, number>;
 };
 
 export type ScopeType = 'team' | 'department';
-export type TeamMemberSortKey = 'name' | 'role' | 'overall' | 'level' | TeamMapDimension;
+export type TeamMemberSortKey =
+  | 'name'
+  | 'role'
+  | 'overall'
+  | 'level'
+  | 'archetype'
+  | TeamMapDimension;
 export type TeamMemberSortDirection = 'asc' | 'desc';
-export type AiResearchPack = {
-  filename: string;
-  markdown: string;
-  metadata?: {
-    projectAliasesByName?: Record<string, string>;
-  };
-};
+export type AiResearchPack = AskAiResearchPack;
 export type TeamMapSeriesKey = 'selected' | 'orgAverage';
 
 export const TEAM_MAP_DIMENSIONS: TeamMapDimension[] = [
@@ -88,9 +94,13 @@ export const TEAM_MAP_DIMENSION_LABELS: Record<TeamMapDimension, string> = {
   Governance: 'Dim7: Governance',
 };
 
-export const TEAM_SECTION_LINKS = [
+export const TEAM_DEEP_ANALYSIS_SECTION_LINKS = [
   { id: 'team-top-summary', label: 'Top summary' },
-  { id: 'team-maturity-map', label: 'Team maturity map' },
+  {
+    id: 'team-maturity-map',
+    label: 'Where are we now?',
+    children: [{ id: 'team-missing-archetypes', label: 'Missing archetypes' }],
+  },
   { id: 'team-gap-signals', label: 'Where are the gaps?' },
   {
     id: 'team-dimensions',
@@ -103,6 +113,28 @@ export const TEAM_SECTION_LINKS = [
   },
   { id: 'team-ai-champions', label: 'AI champions' },
   { id: 'team-members', label: 'Team members' },
+  { id: 'team-suggested-goals', label: 'Where should we invest?' },
+] as const;
+
+export const TEAM_MUST_KNOW_SECTION_LINKS = [
+  { id: 'team-top-summary', label: 'Top summary' },
+  {
+    id: 'team-maturity-map',
+    label: 'Where are we now?',
+    children: [{ id: 'team-missing-archetypes', label: 'Missing archetypes' }],
+  },
+  {
+    id: 'team-gap-signals',
+    label: 'Where are the gaps?',
+    children: [
+      { id: 'team-usage-impact', label: 'Usage vs Impact' },
+      { id: 'team-top-deviating', label: 'Top deviating people' },
+      { id: 'team-maturity-not-spreading', label: 'Maturity not spreading' },
+    ],
+  },
+  { id: 'team-ai-champions', label: 'AI champions' },
+  { id: 'team-members', label: 'Team members' },
+  { id: 'team-suggested-goals', label: 'Suggested goals' },
 ] as const;
 
 export const LEVEL_COLORS = {

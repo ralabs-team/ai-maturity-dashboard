@@ -12,6 +12,7 @@ import {
   CohortStackedTooltip,
   ImpactComparisonTooltip,
 } from './OrganizationChartTooltips';
+import { formatPercentageLabel } from '../charts/formatters';
 import OrganizationSectionHeader from './OrganizationSectionHeader';
 
 type SeriesItem<K extends string = string> = {
@@ -128,7 +129,7 @@ function StackedCard({
             <XAxis
               type="number"
               domain={[0, 100]}
-              tickFormatter={(value) => `${value}%`}
+              tickFormatter={formatPercentageLabel}
               tick={{ fontSize: 12, fill: '#737373' }}
               axisLine={false}
               tickLine={false}
@@ -262,7 +263,7 @@ function SingleCohortCard({
               <XAxis
                 type="number"
                 domain={[0, 100]}
-                tickFormatter={(value) => `${value}%`}
+                tickFormatter={formatPercentageLabel}
                 tick={{ fontSize: 12, fill: '#737373' }}
                 axisLine={false}
                 tickLine={false}
@@ -364,7 +365,7 @@ export default function OrganizationDimensionImpactSection({
   return (
     <section id="org-dimension-impact" className="mt-8 scroll-mt-24">
       <OrganizationSectionHeader
-        title="Dimension 3: Impact"
+        title="Dimension: Impact"
         subtitle="See where AI is already creating visible value, changing workflows, saving time, and where that value is still constrained by access, cost, or operating blockers."
       />
 

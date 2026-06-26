@@ -1,4 +1,5 @@
 import {
+
   memo,
   useEffect,
   useMemo,
@@ -14,6 +15,7 @@ import {
   Check,
   ChevronDown,
   Funnel,
+  Loader2,
   RotateCcw,
   Upload,
   X,
@@ -24,14 +26,16 @@ import PersonAvatar from '../components/ui/PersonAvatar';
 import SensitiveText from '../components/ui/SensitiveText';
 import SurveyAvatar from '../components/ui/SurveyAvatar';
 import { useSurveyData } from '../data/survey/SurveyDataContext';
+import { trackEvent } from '../lib/amplitude';
 import { nameFromEmail } from '../data/survey/scoring';
+import { useTableSortPending } from '../hooks/useTableSortPending';
 import {
   DEFAULT_RAW_SURVEY_ID,
   parseCsv,
   SURVEY_PROFILE_COLUMN_COUNT,
   stringifyCsv,
 } from '../data/survey/rawDatasets';
-import { SURVEYS } from '../data/surveys';
+import { SURVEYS } from '../data/surveyCards';
 
 const TIMESTAMP_INDEX = 0;
 const USERNAME_INDEX = 1;
@@ -238,21 +242,21 @@ function NameCellText({
   hideSurname?: boolean;
   className?: string;
 }) {
+  if (hideSurname) {
+    return (
+      <SensitiveText as="div" hidden className={className}>
+        {name.trim() || 'Unknown'}
+      </SensitiveText>
+    );
+  }
+
   const { firstName, remainder } = splitNameParts(name);
   const resolvedName = name.trim() || 'Unknown';
 
   return (
     <div title={hideSurname ? undefined : resolvedName} className={className}>
       <span>{firstName || 'Unknown'}</span>
-      {remainder ? (
-        hideSurname ? (
-          <SensitiveText as="span" hidden className="inline-block">
-            {remainder}
-          </SensitiveText>
-        ) : (
-          <span>{remainder}</span>
-        )
-      ) : null}
+      {remainder ? <span>{remainder}</span> : null}
     </div>
   );
 }
@@ -289,6 +293,7 @@ interface DataTableProps {
   rows: FormattedRow[];
   sortColumnIndex: number | null;
   sortDirection: SortDirection;
+  isTableSortPending: boolean;
   filterMenuColumnIndex: number | null;
   columnFilters: ColumnFilters;
   activeFilterOptions: string[];
@@ -307,6 +312,7 @@ const DataTable = memo(function DataTable({
   rows,
   sortColumnIndex,
   sortDirection,
+  isTableSortPending,
   filterMenuColumnIndex,
   columnFilters,
   activeFilterOptions,
@@ -352,7 +358,9 @@ const DataTable = memo(function DataTable({
                           <div className="leading-snug">{columnLabel}</div>
                         </div>
                         <span className="shrink-0 text-[#8b8b8b]">
-                          {isSorted ? (
+                          {isTableSortPending && isSorted ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : isSorted ? (
                             sortDirection === 'asc' ? (
                               <ArrowUp className="h-3.5 w-3.5" />
                             ) : (
@@ -505,6 +513,7 @@ const DataTable = memo(function DataTable({
                             name={formattedRow.fullName}
                             className="h-8 w-8"
                             textClassName="text-xs"
+                            hidden={hidePersonSurname}
                           />
                           <NameCellText
                             name={formatted.display}
@@ -557,6 +566,7 @@ export default function DataView() {
   const [visibleRowCount, setVisibleRowCount] = useState(INITIAL_TABLE_ROW_BATCH);
   const [isClearDataModalOpen, setIsClearDataModalOpen] = useState(false);
   const [clearDataCountdown, setClearDataCountdown] = useState(5);
+  const { isTableSortPending, queueTableSort, clearTableSortPending } = useTableSortPending();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const surveyMenuRef = useRef<HTMLDivElement | null>(null);
 
@@ -724,6 +734,19 @@ export default function DataView() {
   }, [formattedRows, selectedSurvey.id]);
 
   useEffect(() => {
+    if (!isTableSortPending || visibleRowCount < formattedRows.length) {
+      return;
+    }
+
+    clearTableSortPending();
+  }, [
+    clearTableSortPending,
+    formattedRows.length,
+    isTableSortPending,
+    visibleRowCount,
+  ]);
+
+  useEffect(() => {
     if (!isSurveyMenuOpen) {
       return undefined;
     }
@@ -766,18 +789,33 @@ export default function DataView() {
   };
 
   const handleSort = (columnIndex: number) => {
-    if (sortColumnIndex === columnIndex) {
-      if (sortDirection === 'asc') {
-        setSortDirection('desc');
-      } else {
-        setSortColumnIndex(null);
-        setSortDirection('asc');
-      }
-      return;
-    }
+    const columnLabel = getColumnLabel(selectedSurvey.columns[columnIndex] ?? `Column ${columnIndex + 1}`, columnIndex);
+    const nextSortState =
+      sortColumnIndex !== columnIndex ? 'asc' : sortDirection === 'asc' ? 'desc' : 'none';
 
-    setSortColumnIndex(columnIndex);
-    setSortDirection('asc');
+    trackEvent('data_table_column_sort_clicked', {
+      page: 'data',
+      survey_id: selectedSurvey.id,
+      column_index: columnIndex,
+      column_label: columnLabel,
+      is_profile_field: columnIndex < SURVEY_PROFILE_COLUMN_COUNT,
+      next_sort_state: nextSortState,
+    });
+
+    queueTableSort(() => {
+      if (sortColumnIndex === columnIndex) {
+        if (sortDirection === 'asc') {
+          setSortDirection('desc');
+        } else {
+          setSortColumnIndex(null);
+          setSortDirection('asc');
+        }
+        return;
+      }
+
+      setSortColumnIndex(columnIndex);
+      setSortDirection('asc');
+    });
   };
 
   const toggleColumnFilterValue = (columnIndex: number, value: string) => {
@@ -807,6 +845,13 @@ export default function DataView() {
   };
 
   const handleUploadClick = () => {
+    trackEvent('data_upload_csv_clicked', {
+      page: 'data',
+      survey_id: selectedSurvey.id,
+      response_count: selectedSurvey.rows.length,
+      question_count: questionColumns.length,
+    });
+
     setUploadTargetSurveyId(selectedSurvey.id);
     setIsUploadSurveyModalOpen(true);
   };
@@ -1046,7 +1091,17 @@ export default function DataView() {
             type="button"
             aria-haspopup="listbox"
             aria-expanded={isSurveyMenuOpen}
-            onClick={() => setIsSurveyMenuOpen((open) => !open)}
+            onClick={() => {
+              trackEvent('data_survey_dropdown_clicked', {
+                page: 'data',
+                survey_id: selectedSurvey.id,
+                response_count: selectedSurvey.rows.length,
+                question_count: questionColumns.length,
+                menu_action: isSurveyMenuOpen ? 'close' : 'open',
+              });
+
+              setIsSurveyMenuOpen((open) => !open);
+            }}
             className={`flex min-w-[320px] items-center gap-3 rounded-xl border bg-white px-3 py-2.5 text-left shadow-sm outline-none transition ${
               isSurveyMenuOpen
                 ? 'border-[#94a3b8] ring-2 ring-[#cbd5e1]'
@@ -1142,7 +1197,15 @@ export default function DataView() {
             {hasResponseData ? (
               <button
                 type="button"
-                onClick={() => setIsClearDataModalOpen(true)}
+                onClick={() => {
+                  trackEvent('data_clear_browser_data_clicked', {
+                    page: 'data',
+                    response_count: selectedSurvey.rows.length,
+                    question_count: questionColumns.length,
+                  });
+
+                  setIsClearDataModalOpen(true);
+                }}
                 className="inline-flex h-[46px] items-center gap-2 rounded-xl border border-[#e5e7eb] bg-white px-4 text-sm font-medium text-[#525252] shadow-sm transition hover:bg-[#fafafa]"
               >
                 <RotateCcw className="h-4 w-4" />
@@ -1442,13 +1505,18 @@ export default function DataView() {
                                 name={candidate.respondentName}
                                 className="h-8 w-8"
                                 textClassName="text-xs"
+                                hidden={isSensitiveDataHidden}
                               />
                               <div className="min-w-0">
-                                <div className="truncate font-medium text-[#242424]">
-                                  {candidate.respondentName}
-                                </div>
+                                <NameCellText
+                                  name={candidate.respondentName}
+                                  hideSurname={isSensitiveDataHidden}
+                                  className="truncate font-medium text-[#242424]"
+                                />
                                 <div className="truncate text-xs text-[#8b8b8b]">
-                                  {candidate.email || 'Unknown email'}
+                                  <SensitiveText as="span" hidden={isSensitiveDataHidden}>
+                                    {candidate.email || 'Unknown email'}
+                                  </SensitiveText>
                                 </div>
                               </div>
                             </div>
@@ -1515,6 +1583,7 @@ export default function DataView() {
           rows={progressivelyVisibleRows}
           sortColumnIndex={sortColumnIndex}
           sortDirection={sortDirection}
+          isTableSortPending={isTableSortPending}
           filterMenuColumnIndex={filterMenuColumnIndex}
           columnFilters={columnFilters}
           activeFilterOptions={activeFilterOptions}
@@ -1621,6 +1690,7 @@ export default function DataView() {
                     name={nameFromEmail(selectedResponse[USERNAME_INDEX] ?? '')}
                     className="h-10 w-10"
                     textClassName="text-sm"
+                    hidden={isSensitiveDataHidden}
                   />
                   <div>
                     <h3 className="text-lg font-semibold text-[#242424]">

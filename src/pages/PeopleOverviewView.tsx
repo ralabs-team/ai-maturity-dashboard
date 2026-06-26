@@ -1,11 +1,13 @@
-import { useMemo, useState, type KeyboardEvent } from 'react';
-import { ArrowDown, ArrowUp, ArrowUpDown, Check, Pencil, X } from 'lucide-react';
+import { useEffect, useMemo, useState, type KeyboardEvent } from 'react';
+import { ArrowDown, ArrowUp, ArrowUpDown, Check, Loader2, Pencil, X } from 'lucide-react';
 import PageHeader from '../components/layout/PageHeader';
 import { useSensitiveData } from '../components/privacy/SensitiveDataContext';
 import PersonAvatar from '../components/ui/PersonAvatar';
 import SensitiveText from '../components/ui/SensitiveText';
 import { useSurveyData } from '../data/survey/SurveyDataContext';
+import { trackEvent } from '../lib/amplitude';
 import { allDepartmentsList, allProjectsList } from '../data/survey/scoring';
+import { useTableSortPending } from '../hooks/useTableSortPending';
 
 type EditableField = 'name' | 'department' | 'projects';
 type SortKey = 'name' | 'department' | 'projects';
@@ -43,7 +45,7 @@ function splitNameParts(name: string): { firstName: string; remainder: string } 
   };
 }
 
-export default function OverviewPeopleView() {
+export default function PeopleOverviewView() {
   const {
     rawResponses,
     resolvePersonName,
@@ -57,6 +59,13 @@ export default function OverviewPeopleView() {
   const [validationMessage, setValidationMessage] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('name');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  const { isTableSortPending, queueTableSort, clearTableSortPending } = useTableSortPending();
+
+  useEffect(() => {
+    if (isTableSortPending) {
+      clearTableSortPending();
+    }
+  }, [clearTableSortPending, isTableSortPending, sortDirection, sortKey]);
 
   const peopleRows = useMemo<PersonDirectoryRow[]>(() => {
     const rowsByUsername = new Map<string, PersonDirectoryRow>();
@@ -99,13 +108,15 @@ export default function OverviewPeopleView() {
   }, [rawResponses, resolvePersonName, sortDirection, sortKey]);
 
   const toggleSort = (nextSortKey: SortKey) => {
-    if (sortKey === nextSortKey) {
-      setSortDirection((currentDirection) => (currentDirection === 'asc' ? 'desc' : 'asc'));
-      return;
-    }
+    queueTableSort(() => {
+      if (sortKey === nextSortKey) {
+        setSortDirection((currentDirection) => (currentDirection === 'asc' ? 'desc' : 'asc'));
+        return;
+      }
 
-    setSortKey(nextSortKey);
-    setSortDirection('asc');
+      setSortKey(nextSortKey);
+      setSortDirection('asc');
+    });
   };
 
   const resetEditingState = () => {
@@ -137,16 +148,39 @@ export default function OverviewPeopleView() {
       return;
     }
 
+    const editedPerson = peopleRows.find((person) => person.username === editing.username);
+
     if (editing.field === 'name') {
       renamePerson(editing.username, sanitizedDraftValue);
+      trackEvent('people_person_renamed', {
+        page: 'people',
+        department_count: editedPerson ? allDepartmentsList(editedPerson.department).length : undefined,
+        project_count: editedPerson ? allProjectsList(editedPerson.projects).filter((project) => project !== 'Unassigned').length : undefined,
+        previous_name_length: editedPerson?.name.length,
+        next_name_length: sanitizedDraftValue.length,
+      });
     }
 
     if (editing.field === 'department') {
       updatePersonDepartment(editing.username, sanitizedDraftValue);
+      trackEvent('people_department_updated', {
+        page: 'people',
+        department_count_before: editedPerson ? allDepartmentsList(editedPerson.department).length : undefined,
+        department_count_after: allDepartmentsList(sanitizedDraftValue).length,
+        project_count: editedPerson ? allProjectsList(editedPerson.projects).filter((project) => project !== 'Unassigned').length : undefined,
+      });
     }
 
     if (editing.field === 'projects') {
       updatePersonProjects(editing.username, sanitizedDraftValue);
+      trackEvent('people_projects_updated', {
+        page: 'people',
+        project_count_before: editedPerson
+          ? allProjectsList(editedPerson.projects).filter((project) => project !== 'Unassigned').length
+          : undefined,
+        project_count_after: allProjectsList(sanitizedDraftValue).filter((project) => project !== 'Unassigned').length,
+        department_count: editedPerson ? allDepartmentsList(editedPerson.department).length : undefined,
+      });
     }
 
     resetEditingState();
@@ -286,7 +320,9 @@ export default function OverviewPeopleView() {
                   className="inline-flex items-center gap-1 transition-colors hover:text-[#111827]"
                 >
                   Department
-                  {sortKey === 'department' ? (
+                  {isTableSortPending && sortKey === 'department' ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : sortKey === 'department' ? (
                     sortDirection === 'asc' ? (
                       <ArrowUp className="h-3.5 w-3.5" />
                     ) : (
@@ -304,7 +340,9 @@ export default function OverviewPeopleView() {
                   className="inline-flex items-center gap-1 transition-colors hover:text-[#111827]"
                 >
                   Projects
-                  {sortKey === 'projects' ? (
+                  {isTableSortPending && sortKey === 'projects' ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : sortKey === 'projects' ? (
                     sortDirection === 'asc' ? (
                       <ArrowUp className="h-3.5 w-3.5" />
                     ) : (

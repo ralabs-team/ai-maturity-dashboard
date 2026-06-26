@@ -1,0 +1,7 @@
+interface:
+  display_name: "Feature Brief Clarifier"
+  short_description: "Ask key questions before feature build"
+  default_prompt: "Use $feature-brief-clarifier before implementing this feature request."
+
+policy:
+  allow_implicit_invocation: true

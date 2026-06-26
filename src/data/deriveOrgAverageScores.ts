@@ -1,6 +1,6 @@
 import type { TechDimension } from './types';
 import { TECH_DIMENSIONS } from './types';
-import { individuals } from './individuals';
+import { individuals } from './deriveIndividuals';
 
 export function deriveOrgAverageScores(
   sourceIndividuals: typeof individuals,

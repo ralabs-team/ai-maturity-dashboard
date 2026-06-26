@@ -12,6 +12,7 @@ import {
   CohortStackedTooltip,
   ImpactComparisonTooltip,
 } from './OrganizationChartTooltips';
+import { formatPercentageLabel } from '../charts/formatters';
 import OrganizationSectionHeader from './OrganizationSectionHeader';
 
 type SeriesItem<K extends string = string> = {
@@ -122,7 +123,7 @@ function StackedCard({
             <XAxis
               type="number"
               domain={[0, 100]}
-              tickFormatter={(value) => `${value}%`}
+              tickFormatter={formatPercentageLabel}
               tick={{ fontSize: 12, fill: '#737373' }}
               axisLine={false}
               tickLine={false}
@@ -242,7 +243,7 @@ export default function OrganizationDimensionVisionSection({
   return (
     <section id="org-dimension-vision" className="mt-8 scroll-mt-24">
       <OrganizationSectionHeader
-        title="Dimension 5: Vision"
+        title="Dimension: Vision"
         subtitle="See how clearly people can spot future AI value, choose the right opportunities, connect them to business outcomes, and define what should happen next."
       />
 

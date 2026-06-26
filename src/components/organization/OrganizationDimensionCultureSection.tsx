@@ -14,7 +14,9 @@ import {
   CohortStackedTooltip,
   ImpactComparisonTooltip,
 } from './OrganizationChartTooltips';
+import { formatPercentageLabel } from '../charts/formatters';
 import OrganizationSectionHeader from './OrganizationSectionHeader';
+import ExperienceReviewOptions, { type ExperienceReviewCohorts } from './ExperienceReviewOptions';
 
 type SeriesItem<K extends string = string> = {
   key: K;
@@ -131,7 +133,7 @@ function StackedCard({
             <XAxis
               type="number"
               domain={[0, 100]}
-              tickFormatter={(value) => `${value}%`}
+              tickFormatter={formatPercentageLabel}
               tick={{ fontSize: 12, fill: '#737373' }}
               axisLine={false}
               tickLine={false}
@@ -291,6 +293,7 @@ function SingleCohortCard({
 
 export type OrganizationDimensionCultureSectionProps = {
   topChampionRows: ChampionRow[];
+  detailedReviewCohorts: ExperienceReviewCohorts;
   growthMomentum: StackedCardConfig;
   experimentationInitiative: StackedCardConfig;
   knowledgeSharing: StackedCardConfig;
@@ -303,7 +306,6 @@ export type OrganizationDimensionCultureSectionProps = {
   handsOnHelp: ComparisonCardConfig;
   practiceResilience: StackedCardConfig;
   knowledgeArtifacts: StackedCardConfig;
-  deliveryAutomationSharing: SingleCohortCardConfig;
   businessOnboarding: SingleCohortCardConfig;
   businessColor: string;
   deliveryColor: string;
@@ -311,6 +313,7 @@ export type OrganizationDimensionCultureSectionProps = {
 
 export default function OrganizationDimensionCultureSection({
   topChampionRows,
+  detailedReviewCohorts,
   growthMomentum,
   experimentationInitiative,
   knowledgeSharing,
@@ -323,7 +326,6 @@ export default function OrganizationDimensionCultureSection({
   handsOnHelp,
   practiceResilience,
   knowledgeArtifacts,
-  deliveryAutomationSharing,
   businessOnboarding,
   businessColor,
   deliveryColor,
@@ -331,13 +333,14 @@ export default function OrganizationDimensionCultureSection({
   return (
     <section id="org-dimension-culture" className="mt-8 scroll-mt-24">
       <OrganizationSectionHeader
-        title="Dimension 4: Culture"
+        title="Dimension: Culture"
         subtitle="See whether AI practice is spreading, becoming team-owned, and turning into reusable habits instead of staying dependent on a few individual champions."
       />
 
       <div id="org-ai-champions" className="scroll-mt-24">
         <ChampionVisibilityOptions topChampionRows={topChampionRows} />
       </div>
+      <ExperienceReviewOptions cohorts={detailedReviewCohorts} />
 
       <StackedCard {...growthMomentum} />
       <StackedCard {...experimentationInitiative} />
@@ -351,7 +354,6 @@ export default function OrganizationDimensionCultureSection({
       <ComparisonCard {...handsOnHelp} businessColor={businessColor} deliveryColor={deliveryColor} />
       <StackedCard {...practiceResilience} />
       <StackedCard {...knowledgeArtifacts} />
-      <SingleCohortCard {...deliveryAutomationSharing} />
       <SingleCohortCard {...businessOnboarding} />
     </section>
   );

@@ -2,8 +2,9 @@ import PageHeader from '../components/layout/PageHeader';
 import { ArrowRight, ExternalLink, Upload } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import SurveyAvatar from '../components/ui/SurveyAvatar';
-import { SURVEYS } from '../data/surveys';
+import { SURVEYS } from '../data/surveyCards';
 import { useSurveyData } from '../data/survey/SurveyDataContext';
+import { trackEvent } from '../lib/amplitude';
 
 function formatSurveyDate(value?: string): string {
   if (!value) return 'Not added yet';
@@ -100,6 +101,13 @@ export default function SurveysView() {
                     href={survey.googleFormUrl}
                     target="_blank"
                     rel="noreferrer"
+                    onClick={() =>
+                      trackEvent('survey_google_form_opened', {
+                        survey_id: survey.id,
+                        survey_title: survey.title,
+                        survey_url: survey.googleFormUrl,
+                      })
+                    }
                     className="inline-flex items-center gap-2 rounded-full border border-[#d9d9d9] bg-[#fafafa] px-3 py-1.5 text-sm font-medium text-[#242424] transition-colors hover:border-[#c8c8c8] hover:bg-white"
                   >
                     Open Google Form

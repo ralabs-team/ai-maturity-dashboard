@@ -82,12 +82,16 @@ export default function DepartmentTeamFilters({
                 className="inline-flex items-center gap-1.5 rounded-full border border-[#e5e7eb] bg-[#f4f4f5] py-1 pl-2.5 pr-1 text-xs font-medium text-[#242424]"
               >
                 <span className="text-[#6b7280]">Department</span>
-                <span>{department}</span>
+                <SensitiveText as="span" hidden={isSensitiveDataHidden}>
+                  {department}
+                </SensitiveText>
                 <button
                   type="button"
                   onClick={() => onRemoveDepartment(department)}
                   className="rounded-full p-1 text-[#8b8b8b] transition hover:bg-white hover:text-[#242424]"
-                  aria-label={`Remove department filter ${department}`}
+                  aria-label={
+                    isSensitiveDataHidden ? 'Remove department filter' : `Remove department filter ${department}`
+                  }
                 >
                   <X className="h-3 w-3" />
                 </button>

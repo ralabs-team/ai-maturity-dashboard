@@ -1,4 +1,6 @@
 import { ScatterChart, Scatter, ResponsiveContainer, CartesianGrid, XAxis, YAxis, ZAxis, Tooltip, Cell, ReferenceLine } from '../recharts';
+import ChartFeedback from '../../analytics/ChartFeedback';
+import { SensitiveTooltipLabel } from '../../ui/SensitiveChartText';
 
 type UsageImpactScope = 'department' | 'team';
 type QuadrantSummaryItem = {
@@ -34,9 +36,11 @@ function UsageImpactTooltip({
 
   return (
     <div className="rounded-md bg-[#242424] px-4 py-3 text-sm text-white shadow-lg">
-      <div className="mb-2 font-semibold text-white">
-        {scopeLabel}: {point.name}
-      </div>
+      <SensitiveTooltipLabel
+        prefix={scopeLabel}
+        value={point.name}
+        className="mb-2 font-semibold text-white"
+      />
       <div className="space-y-1">
         <div>Impact: {point.impact.toFixed(1)} / 5</div>
         <div>Usage: {point.usage.toFixed(1)} / 5</div>
@@ -63,7 +67,8 @@ export default function UsageImpactQuadrantCard({
   highlightName?: string;
 }) {
   return (
-    <section className="rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
+    <section className="group relative rounded-2xl border border-[#eaeaea] bg-white p-6 shadow-sm">
+      <ChartFeedback chartTitle="Usage vs Impact quadrant" page="organization" />
       <h3 className="text-lg font-semibold tracking-tight text-[#242424]">
         Usage vs Impact quadrant
       </h3>

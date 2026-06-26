@@ -1,3 +1,5 @@
+import { formatPercentageLabel } from '../charts/formatters';
+
 export function CohortStackedTooltip({
   active,
   payload,
@@ -33,7 +35,7 @@ export function CohortStackedTooltip({
                 <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
                 <span>{entry.name}</span>
               </div>
-              <span>{Number(entry.value ?? 0).toFixed(1)}%</span>
+              <span>{formatPercentageLabel(Number(entry.value ?? 0))}</span>
             </div>
           ))}
       </div>

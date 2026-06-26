@@ -45,7 +45,8 @@ export default function CompactUsageMultiSelect({
       : `${selectedValues.length} ${
           selectedValues.length === 1 ? singularLabel : pluralLabel
         }`;
-  const shouldMaskOptionLabels = isSensitiveDataHidden && placeholder === 'Team';
+  const shouldMaskOptionLabels =
+    isSensitiveDataHidden && (placeholder === 'Team' || placeholder === 'Department');
 
   useEffect(() => {
     if (!open) {

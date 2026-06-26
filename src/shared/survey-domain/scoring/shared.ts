@@ -1,5 +1,5 @@
-import type { TechDimension } from '../../types';
-import { MAX_DIMENSION_SCORE, scoreToLevel as levelFromScore } from '../../types';
+import type { TechDimension } from '../maturity';
+import { MAX_DIMENSION_SCORE, scoreToLevel as levelFromScore } from '../maturity';
 export const LEVEL_LABELS_INDEX: Record<number, string> = {
   1: 'Observer',
   2: 'Explorer',

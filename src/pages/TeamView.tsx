@@ -1,26 +1,39 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useSearchParams } from 'react-router-dom';
 import { ChevronDown } from 'lucide-react';
+import AskAiSidebar from '../components/ai/AskAiSidebar';
 import PageHeader from '../components/layout/PageHeader';
 import FloatingSectionNav from '../components/layout/FloatingSectionNav';
 import { useNavigationPending } from '../components/layout/NavigationPendingContext';
 import { useSensitiveData } from '../components/privacy/SensitiveDataContext';
 import {
+
   AI_CHAMPION_SCORE_THRESHOLD,
   buildChampionRows,
 } from '../components/organization/ChampionVisibilityOptions';
+import {
+  buildResistanceByScopeRows,
+} from '../components/charts/organization/ResistanceByScopeCard';
+import {
+  buildResistanceReasonComparison,
+  buildResistanceSummary,
+  RESISTANCE_SCORE_HELP_TEXT,
+} from '../components/charts/organization/ResistanceReasonsCard';
 import TeamChampionsSection from '../components/team/TeamChampionsSection';
 import TeamDimensionsSection from '../components/team/TeamDimensionsSection';
 import TeamGapInsightsSection from '../components/team/TeamGapInsightsSection';
 import TeamMaturityMapSection from '../components/team/TeamMaturityMapSection';
 import TeamMembersSection from '../components/team/TeamMembersSection';
+import TeamSuggestedGoalsSection from '../components/team/TeamSuggestedGoalsSection';
 import TeamSummarySection from '../components/team/TeamSummarySection';
 import SensitiveText from '../components/ui/SensitiveText';
+import { useTableSortPending } from '../hooks/useTableSortPending';
 import {
   LEVEL_COLORS,
   TEAM_MAP_DIMENSIONS,
+  TEAM_DEEP_ANALYSIS_SECTION_LINKS,
   TEAM_MAP_SERIES_META,
-  TEAM_SECTION_LINKS,
+  TEAM_MUST_KNOW_SECTION_LINKS,
   teamBadgeLabel,
   type AiResearchPack,
   type CompositeSubscore,
@@ -40,12 +53,17 @@ import {
   buildScopedUsageImpactPoints,
   buildScopedWorkflowTransformationPoints,
 } from '../data/survey/gapInsights';
+import { resolveIndividualArchetype } from '../data/survey/individualArchetypes';
+import { resolveTeamArchetype } from '../data/survey/teamArchetypes';
+import { buildDeviatingPeopleRows } from '../data/survey/deviationInsights';
+import { buildTeamSuggestedGoals } from '../data/survey/goals';
 import {
   allDepartmentsList,
   allProjectsList,
   computeCompositeQuestionScore,
   type RawResponse,
 } from '../data/survey/scoring';
+import { buildTeamValidatedPersonRows } from '../data/survey/teamValidatedView';
 import { LEVEL_LABELS, scoreToLevel } from '../data/types';
 
 const TEAM_MAP_COMPOSITE_QUESTION_KEYS: Record<
@@ -615,6 +633,7 @@ function buildDerivedScopeBundle(
     const overallLevel = scoreToLevel(currentOverall);
     const strongest = (Object.entries(dimensions).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'Usage') as TeamDimension;
     const weakest = (Object.entries(dimensions).sort((a, b) => a[1] - b[1])[0]?.[0] ?? 'Usage') as TeamDimension;
+    const archetype = resolveTeamArchetype(dimensions);
     const level45Share = percentage(
       teamMembers.filter((member) => member.overallLevel >= 4).length,
       respondents,
@@ -645,22 +664,27 @@ function buildDerivedScopeBundle(
     };
 
     teamMemberData[id] = teamMembersWithCompositeScores
-      .map(({ member, dataScore, governanceScore }) => ({
-        name: member.name,
-        role: member.role,
-        overall: roundToOne(member.overallScore),
-        level: LEVEL_LABELS[member.overallLevel],
-        levelNumber: member.overallLevel,
-        dimensions: {
-          Usage: roundToOne(member.scores.Usage),
-          Skills: roundToOne(member.scores.Skills),
-          Impact: roundToOne(member.scores.Impact),
-          Culture: roundToOne(member.scores.Culture),
-          Vision: roundToOne(member.scores.Vision),
-          Data: roundToOne(dataScore ?? 0),
-          Governance: roundToOne(governanceScore ?? 0),
-        },
-      }))
+      .map(({ member, dataScore, governanceScore }) => {
+        const archetype = resolveIndividualArchetype(member.scores);
+
+        return {
+          name: member.name,
+          role: member.role,
+          overall: roundToOne(member.overallScore),
+          level: LEVEL_LABELS[member.overallLevel],
+          levelNumber: member.overallLevel,
+          archetype,
+          dimensions: {
+            Usage: roundToOne(member.scores.Usage),
+            Skills: roundToOne(member.scores.Skills),
+            Impact: roundToOne(member.scores.Impact),
+            Culture: roundToOne(member.scores.Culture),
+            Vision: roundToOne(member.scores.Vision),
+            Data: roundToOne(dataScore ?? 0),
+            Governance: roundToOne(governanceScore ?? 0),
+          },
+        };
+      })
       .sort((a, b) => b.overall - a.overall);
 
     teamRecords.push({
@@ -714,6 +738,7 @@ function buildDerivedScopeBundle(
       color,
       clientValue: roundToOne((dimensions.Impact + dimensions.Vision) / 2),
       clientTrust: roundToOne((dimensions.Culture + dimensions.Skills) / 2),
+      archetype,
     });
   });
 
@@ -730,6 +755,7 @@ export default function TeamView() {
   const { isSensitiveDataHidden } = useSensitiveData();
   const { individuals, rawResponses, resolvePersonName } = useSurveyData();
   const { clearPendingNavigation } = useNavigationPending();
+  const [insightsMode, setInsightsMode] = useState<'mustKnow' | 'deepDive'>('mustKnow');
   const [selectedScopeType, setSelectedScopeType] = useState<ScopeType>(() =>
     searchParams.get('scope') === 'department' ? 'department' : 'team',
   );
@@ -750,8 +776,10 @@ export default function TeamView() {
     key: 'overall',
     direction: 'desc',
   });
+  const { isTableSortPending, queueTableSort, clearTableSortPending } = useTableSortPending();
   const [hiddenTeamMapSeries, setHiddenTeamMapSeries] = useState<TeamMapSeriesKey[]>([]);
   const [isPreparingAiResearchPack, setIsPreparingAiResearchPack] = useState(false);
+  const [isAskAiOpen, setIsAskAiOpen] = useState(false);
   const aiResearchPackRef = useRef<AiResearchPack | null>(null);
   const aiResearchPackPromiseRef = useRef<Promise<AiResearchPack> | null>(null);
   const aiResearchPackVersionRef = useRef(0);
@@ -759,6 +787,12 @@ export default function TeamView() {
   useEffect(() => {
     clearPendingNavigation('/teams');
   }, [clearPendingNavigation]);
+
+  useEffect(() => {
+    if (isTableSortPending) {
+      clearTableSortPending();
+    }
+  }, [clearTableSortPending, isTableSortPending, teamMemberSort]);
 
   useEffect(() => {
     aiResearchPackVersionRef.current += 1;
@@ -923,6 +957,13 @@ export default function TeamView() {
   const scopeLabel = selectedScopeType === 'team' ? 'Team' : 'Department';
   const scopeLabelLower = scopeLabel.toLowerCase();
   const scopeLabelPlural = selectedScopeType === 'team' ? 'teams' : 'departments';
+  const handleScopeTypeSelect = (scopeType: ScopeType) => {
+    setSelectedScopeType(scopeType);
+  };
+  const handleScopeSelect = (scopeId: string) => {
+    setSelectedTeamId(scopeId);
+    setTeamDropdownOpen(false);
+  };
   const filteredTeamOptions = useMemo(() => {
     const normalizedQuery = teamSearchQuery.trim().toLowerCase();
 
@@ -990,6 +1031,8 @@ export default function TeamView() {
             return left.overall - right.overall;
           case 'level':
             return (left.levelNumber ?? 0) - (right.levelNumber ?? 0);
+          case 'archetype':
+            return (left.archetype?.label ?? '').localeCompare(right.archetype?.label ?? '');
           default:
             return left.dimensions[teamMemberSort.key] - right.dimensions[teamMemberSort.key];
         }
@@ -1013,6 +1056,29 @@ export default function TeamView() {
     (member) => (member.levelNumber ?? 0) >= 4,
   ).length;
   const selectedTeamResponseCount = selectedTeamMembers.length || selectedTeam.respondents;
+  const askAiScopeLabel =
+    selectedScopeName && !isSensitiveDataHidden ? selectedScopeName : scopeLabel;
+  const askAiAvatarName =
+    selectedScopeName && !isSensitiveDataHidden ? selectedScopeName : undefined;
+  const teamSectionLinks =
+    insightsMode === 'mustKnow' ? TEAM_MUST_KNOW_SECTION_LINKS : TEAM_DEEP_ANALYSIS_SECTION_LINKS;
+  const isMustKnowMode = insightsMode === 'mustKnow';
+  const selectedScopeResistanceSummary = useMemo(
+    () => buildResistanceSummary(selectedScopeResponses),
+    [selectedScopeResponses],
+  );
+  const selectedScopeBlockerComparison = useMemo(
+    () => buildResistanceReasonComparison(selectedScopeResponses),
+    [selectedScopeResponses],
+  );
+  const resistanceDepartmentRows = useMemo(
+    () => buildResistanceByScopeRows(rawResponses, 'department'),
+    [rawResponses],
+  );
+  const resistanceTeamRows = useMemo(
+    () => buildResistanceByScopeRows(rawResponses, 'team'),
+    [rawResponses],
+  );
   const scopedGapInsights = useMemo(
     () => ({
       usageImpactData: buildScopedUsageImpactPoints(selectedScopeIndividuals, selectedScopeResponses),
@@ -1058,6 +1124,53 @@ export default function TeamView() {
 
     return (selectedScopeChampionCount / selectedScopeIndividuals.length) * 100;
   }, [selectedScopeChampionCount, selectedScopeIndividuals]);
+  const selectedScopeSuggestedGoals = useMemo(
+    () =>
+      buildTeamSuggestedGoals({
+        scopedIndividuals: selectedScopeIndividuals,
+        allIndividuals: individuals,
+        championShare: selectedScopeChampionShare,
+        resistanceSummary: {
+          score: selectedScopeResistanceSummary.score,
+          highResistanceShare: selectedScopeResistanceSummary.highResistanceShare,
+        },
+        usageImpactData: scopedGapInsights.usageImpactData,
+        supportDemandRows: scopedGapInsights.supportDemandRows,
+        toolAccessRows: scopedGapInsights.toolAccessRows,
+        workflowRows: scopedGapInsights.workflowRows,
+      }),
+    [
+      individuals,
+      scopedGapInsights.supportDemandRows,
+      scopedGapInsights.toolAccessRows,
+      scopedGapInsights.usageImpactData,
+      scopedGapInsights.workflowRows,
+      selectedScopeChampionShare,
+      selectedScopeIndividuals,
+      selectedScopeResistanceSummary.highResistanceShare,
+      selectedScopeResistanceSummary.score,
+    ],
+  );
+  const allDeviatingPeopleRows = useMemo(
+    () => buildDeviatingPeopleRows(individuals, rawResponses),
+    [individuals, rawResponses],
+  );
+  const allTeamValidatedPersonRows = useMemo(
+    () => buildTeamValidatedPersonRows(individuals, rawResponses),
+    [individuals, rawResponses],
+  );
+  const selectedScopePersonIds = useMemo(
+    () => new Set(selectedScopeIndividuals.map((person) => person.id)),
+    [selectedScopeIndividuals],
+  );
+  const selectedScopeDeviatingRows = useMemo(
+    () => allDeviatingPeopleRows.filter((row) => selectedScopePersonIds.has(row.person.id)),
+    [allDeviatingPeopleRows, selectedScopePersonIds],
+  );
+  const selectedScopeMaturityNotSpreadingRows = useMemo(
+    () => allTeamValidatedPersonRows.filter((row) => selectedScopePersonIds.has(row.person.id)),
+    [allTeamValidatedPersonRows, selectedScopePersonIds],
+  );
 
   const getAiResearchPack = async (): Promise<AiResearchPack> => {
     if (aiResearchPackRef.current) {
@@ -1073,6 +1186,8 @@ export default function TeamView() {
             individuals: selectedScopeIndividuals,
             rawResponses: selectedScopeResponses,
             resolvePersonName,
+            scopeType: selectedScopeType,
+            scopeLabel: askAiScopeLabel,
           }),
         )
         .then((researchPack) => {
@@ -1136,9 +1251,11 @@ export default function TeamView() {
     }
   };
 
-  const openExternalAi = (url: string) => {
-    window.open(url, '_blank', 'noopener,noreferrer');
-  };
+  const askAiStarterQuestions = [
+    `What stands out most about ${selectedScopeName}?`,
+    `Which dimension is holding ${selectedScopeName} back the most?`,
+    `What should ${selectedScopeName} focus on in the next 30 days?`,
+  ];
 
   const jumpToAiChampions = () => {
     document.getElementById('team-ai-champions')?.scrollIntoView({
@@ -1148,17 +1265,19 @@ export default function TeamView() {
   };
 
   const toggleTeamMemberSort = (key: TeamMemberSortKey) => {
-    setTeamMemberSort((current) => ({
-      key,
-      direction:
-        current.key === key
-          ? current.direction === 'asc'
-            ? 'desc'
-            : 'asc'
-          : key === 'name' || key === 'role'
-            ? 'asc'
-            : 'desc',
-    }));
+    queueTableSort(() => {
+      setTeamMemberSort((current) => ({
+        key,
+        direction:
+          current.key === key
+            ? current.direction === 'asc'
+              ? 'desc'
+              : 'asc'
+            : key === 'name' || key === 'role'
+              ? 'asc'
+              : 'desc',
+      }));
+    });
   };
 
   const teamMemberSortIndicator = (key: TeamMemberSortKey) => {
@@ -1172,7 +1291,7 @@ export default function TeamView() {
   return (
     <div className="relative">
       <FloatingSectionNav
-        items={TEAM_SECTION_LINKS}
+        items={teamSectionLinks}
         showItemLabelsOnHover
         labelAlignment="right"
       />
@@ -1193,7 +1312,7 @@ export default function TeamView() {
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
             <div className="flex flex-wrap gap-2">
               {([
-                { key: 'team' as const, label: 'Projects / Teams' },
+                { key: 'team' as const, label: 'Teams' },
                 { key: 'department' as const, label: 'Departments' },
               ]).map((option) => {
                 const isActive = selectedScopeType === option.key;
@@ -1202,7 +1321,7 @@ export default function TeamView() {
                   <button
                     key={option.key}
                     type="button"
-                    onClick={() => setSelectedScopeType(option.key)}
+                    onClick={() => handleScopeTypeSelect(option.key)}
                     className={`inline-flex items-center rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
                       isActive
                         ? 'border border-[#bfdbfe] bg-[#eff6ff] text-[#1d4ed8]'
@@ -1264,10 +1383,7 @@ export default function TeamView() {
                           <button
                             key={team.id}
                             type="button"
-                            onClick={() => {
-                              setSelectedTeamId(team.id);
-                              setTeamDropdownOpen(false);
-                            }}
+                            onClick={() => handleScopeSelect(team.id)}
                             className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm transition-colors ${
                               isSelected
                                 ? 'bg-[#f4fbf7] text-[#242424]'
@@ -1307,6 +1423,28 @@ export default function TeamView() {
           </div>
         </div>
       </section>
+
+      <div className="mt-6 mb-6">
+        <div className="inline-flex w-fit items-center rounded-full border border-[#e5e7eb] bg-white p-1 shadow-sm">
+          {[
+            { id: 'mustKnow' as const, label: 'Must-know' },
+            { id: 'deepDive' as const, label: 'Deep analysis' },
+          ].map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              onClick={() => setInsightsMode(option.id)}
+              className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                insightsMode === option.id
+                  ? 'bg-[#3f3f46] text-white shadow-sm'
+                  : 'text-[#6b7280] hover:bg-[#f5f5f5] hover:text-[#242424]'
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
       <TeamSummarySection
         scopeLabelLower={scopeLabelLower}
         selectedTeamLevel45Count={selectedTeamLevel45Count}
@@ -1315,16 +1453,21 @@ export default function TeamView() {
         selectedTeamResponseCount={selectedTeamResponseCount}
         aiChampionCount={selectedScopeChampionCount}
         aiChampionShare={selectedScopeChampionShare}
+        resistanceScore={selectedScopeResistanceSummary.score}
+        resistanceRespondentCount={selectedScopeResistanceSummary.respondentCount}
+        highResistanceShare={selectedScopeResistanceSummary.highResistanceShare}
+        resistanceHelpText={RESISTANCE_SCORE_HELP_TEXT}
         isPreparingAiResearchPack={isPreparingAiResearchPack}
         onDownloadAiResearchPack={downloadAiResearchPack}
+        onOpenAskAi={() => setIsAskAiOpen(true)}
         onJumpToAiChampions={jumpToAiChampions}
-        onOpenExternalAi={openExternalAi}
       />
 
       <TeamMaturityMapSection
         scopeLabel={scopeLabel}
         scopeLabelLower={scopeLabelLower}
         radarData={radarData}
+        scopedIndividuals={selectedScopeIndividuals}
         levelDistribution={selectedTeam.levelDistribution}
         hiddenTeamMapSeries={hiddenTeamMapSeries}
         onToggleSeries={(seriesKey) =>
@@ -1335,23 +1478,35 @@ export default function TeamView() {
           )
         }
         teamMapSeriesMeta={teamMapSeriesMeta}
+        scopeArchetype={selectedTeam.archetype ?? null}
       />
 
       <TeamGapInsightsSection
+        variant={isMustKnowMode ? 'mustKnow' : 'deepAnalysis'}
         scopeLabelLower={scopeLabelLower}
         selectedScopeName={selectedScopeName}
+        selectedScopeType={selectedScopeType}
         usageImpactData={scopedGapInsights.usageImpactData}
         comparisonUsageImpactData={scopedGapInsights.comparisonUsageImpactData}
         supportDemandRows={scopedGapInsights.supportDemandRows}
         toolAccessRows={scopedGapInsights.toolAccessRows}
         workflowRows={scopedGapInsights.workflowRows}
+        blockerComparison={selectedScopeBlockerComparison}
+        resistanceDepartmentRows={resistanceDepartmentRows}
+        resistanceTeamRows={resistanceTeamRows}
+        deviatingPeopleRows={selectedScopeDeviatingRows}
+        maturityNotSpreadingRows={selectedScopeMaturityNotSpreadingRows}
       />
 
-      <TeamDimensionsSection
-        scopeLabelLower={scopeLabelLower}
-        selectedScopeName={selectedScopeName}
-        responses={selectedScopeResponses}
-      />
+      {isMustKnowMode ? null : (
+        <>
+          <TeamDimensionsSection
+            scopeLabelLower={scopeLabelLower}
+            selectedScopeName={selectedScopeName}
+            responses={selectedScopeResponses}
+          />
+        </>
+      )}
 
       <TeamChampionsSection
         scopeLabelLower={scopeLabelLower}
@@ -1364,6 +1519,25 @@ export default function TeamView() {
         members={sortedSelectedTeamMembers}
         onToggleSort={toggleTeamMemberSort}
         sortIndicator={teamMemberSortIndicator}
+        activeSortKey={teamMemberSort.key}
+        isSortPending={isTableSortPending}
+      />
+
+      <TeamSuggestedGoalsSection
+        scopeLabelLower={scopeLabelLower}
+        goals={selectedScopeSuggestedGoals}
+      />
+
+      <AskAiSidebar
+        isOpen={isAskAiOpen}
+        onClose={() => setIsAskAiOpen(false)}
+        scopeType={selectedScopeType}
+        scopeLabel={askAiScopeLabel}
+        scopeDescription={`Ask follow-up questions about ${scopeLabelLower} patterns, benchmarks, blockers, and the next best actions.`}
+        avatarName={askAiAvatarName}
+        threadKey={`${selectedScopeType}:${selectedTeamId}`}
+        buildResearchPack={getAiResearchPack}
+        starterQuestions={askAiStarterQuestions}
       />
     </div>
   );
