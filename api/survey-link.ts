@@ -1,4 +1,4 @@
-import { handleGetSurveyLinkRequest } from '../server/survey-api';
+import { handleGetSurveyLinkRequest } from '../server/survey-api.js';
 
 type ApiRequest = {
   url?: string;

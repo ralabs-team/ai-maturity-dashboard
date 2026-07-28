@@ -8,7 +8,7 @@ import type {
   TeamInsightsResponse,
   TeamInsightsScope,
   Workspace,
-} from '../survey-domain';
+} from '../survey-domain/index.js';
 
 export interface ApiClient {
   getSession(): Promise<AuthSession>;

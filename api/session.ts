@@ -1,4 +1,4 @@
-import { handleGetSessionRequest } from '../server/survey-api';
+import { handleGetSessionRequest } from '../server/survey-api.js';
 
 type ApiResponse = {
   status: (code: number) => ApiResponse;

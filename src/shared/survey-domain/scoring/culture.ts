@@ -4,7 +4,7 @@ import {
   type RawResponse,
   type ScoreMap,
   weightedEntry,
-} from './shared';
+} from './shared.js';
 
 const SINGLE_SCORES: Record<string, ScoreMap> = {
   '4.1': [

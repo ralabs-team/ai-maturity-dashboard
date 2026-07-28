@@ -1,4 +1,4 @@
-import { handleUploadSurveyCsvRequest } from '../../server/survey-api';
+import { handleUploadSurveyCsvRequest } from '../../server/survey-api.js';
 
 type ApiRequest = {
   method?: string;

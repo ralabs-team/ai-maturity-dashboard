@@ -1,4 +1,4 @@
-import type { SurveyType, TechDimension } from '../survey-domain';
+import type { SurveyType, TechDimension } from '../survey-domain/index.js';
 
 export type AskAiScopeType = 'organization' | 'team' | 'department' | 'individual';
 

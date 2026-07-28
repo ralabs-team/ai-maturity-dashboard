@@ -8,11 +8,11 @@ import {
   type RawResponse,
   type ScoreMap,
   weightedEntry,
-} from './shared';
+} from './shared.js';
 import {
   scorePrimaryModelSelection,
   scorePrimaryToolSelection,
-} from './usage';
+} from './usage.js';
 
 type BusinessUsageGroup = 'communication' | 'research' | 'planning' | 'execution' | 'enablement';
 type WorkflowEvidence = 'none' | 'basic' | 'advanced' | 'unknown';

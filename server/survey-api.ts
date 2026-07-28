@@ -1,4 +1,8 @@
-import { SURVEY_DEFINITIONS, type AuthSession, type SurveyDefinition } from '../src/shared/survey-domain';
+import {
+  SURVEY_DEFINITIONS,
+  type AuthSession,
+  type SurveyDefinition,
+} from '../src/shared/survey-domain/index.js';
 
 type JsonResult = {
   status: number;

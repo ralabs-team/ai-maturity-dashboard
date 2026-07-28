@@ -1,13 +1,13 @@
-import { scoreToLevel, type TechDimension } from './maturity';
+import { scoreToLevel, type TechDimension } from './maturity.js';
 import {
   scoreBusinessCultureEntries,
   scoreBusinessImpactEntries,
   scoreBusinessSkillsEntries,
   scoreBusinessUsageEntries,
-} from './scoring/business';
-import { scoreCultureEntries } from './scoring/culture';
-import { scoreDeliveryEngineeringVisionEntries } from './scoring/deliveryEngineeringVision';
-import { scoreImpactEntries } from './scoring/impact';
+} from './scoring/business.js';
+import { scoreCultureEntries } from './scoring/culture.js';
+import { scoreDeliveryEngineeringVisionEntries } from './scoring/deliveryEngineeringVision.js';
+import { scoreImpactEntries } from './scoring/impact.js';
 import {
   aggregate,
   checkCredibility,
@@ -22,10 +22,10 @@ import {
   type RawResponse,
   type ScoringResult,
   type SurveyType,
-} from './scoring/shared';
-import { scoreSkillsEntries } from './scoring/skills';
-import { scoreUsageEntries } from './scoring/usage';
-import { scoreBusinessVisionEntries } from './scoring/businessVision';
+} from './scoring/shared.js';
+import { scoreSkillsEntries } from './scoring/skills.js';
+import { scoreUsageEntries } from './scoring/usage.js';
+import { scoreBusinessVisionEntries } from './scoring/businessVision.js';
 
 export {
   computeOverallScoreFromDimensionScores,

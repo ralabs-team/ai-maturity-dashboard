@@ -1,4 +1,4 @@
-import { handleListSurveyResponsesRequest } from '../../server/survey-api';
+import { handleListSurveyResponsesRequest } from '../../server/survey-api.js';
 
 type ApiResponse = {
   status: (code: number) => ApiResponse;

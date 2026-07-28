@@ -8,7 +8,7 @@ import {
   type ScoreMap,
   splitMulti,
   weightedEntry,
-} from './shared';
+} from './shared.js';
 
 type ToolCategory = 'agentic' | 'ide' | 'chat' | 'research';
 type ModelFamily = 'gpt' | 'claude' | 'gemini' | 'self_hosted' | 'codex';

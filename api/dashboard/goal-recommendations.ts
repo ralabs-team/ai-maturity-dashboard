@@ -1,4 +1,4 @@
-import { handleGetGoalRecommendationsRequest } from '../../server/survey-api';
+import { handleGetGoalRecommendationsRequest } from '../../server/survey-api.js';
 
 type ApiRequest = {
   url?: string;

@@ -1,4 +1,4 @@
-import { handleCreateSurveyResponseRequest } from '../server/survey-api';
+import { handleCreateSurveyResponseRequest } from '../server/survey-api.js';
 
 type ApiRequest = {
   method?: string;

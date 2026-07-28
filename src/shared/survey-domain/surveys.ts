@@ -1,4 +1,4 @@
-import type { SurveyDefinition } from './contracts';
+import type { SurveyDefinition } from './contracts.js';
 
 export const SURVEY_DEFINITIONS: SurveyDefinition[] = [
   {

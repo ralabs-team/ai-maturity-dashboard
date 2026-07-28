@@ -8,7 +8,7 @@ import {
   type ScoreMap,
   splitMulti,
   weightedEntry,
-} from './shared';
+} from './shared.js';
 
 type ActionCategory = 'enablement' | 'workflow' | 'governance' | 'strategy';
 

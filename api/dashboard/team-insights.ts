@@ -1,4 +1,4 @@
-import { handleGetTeamInsightsRequest } from '../../server/survey-api';
+import { handleGetTeamInsightsRequest } from '../../server/survey-api.js';
 
 type ApiRequest = {
   url?: string;

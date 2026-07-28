@@ -1,4 +1,4 @@
-import type { QuestionScore, SurveyType } from './scoring/shared';
+import type { QuestionScore, SurveyType } from './scoring/shared.js';
 
 export type RoleType = 'tech' | 'non-tech';
 

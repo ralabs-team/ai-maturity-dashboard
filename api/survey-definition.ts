@@ -1,4 +1,4 @@
-import { handleGetSurveyDefinitionRequest } from '../server/survey-api';
+import { handleGetSurveyDefinitionRequest } from '../server/survey-api.js';
 
 type ApiRequest = {
   url?: string;

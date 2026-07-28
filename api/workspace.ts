@@ -1,4 +1,4 @@
-import { handleGetWorkspaceRequest } from '../server/survey-api';
+import { handleGetWorkspaceRequest } from '../server/survey-api.js';
 
 type ApiResponse = {
   status: (code: number) => ApiResponse;

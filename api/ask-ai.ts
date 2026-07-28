@@ -1,4 +1,4 @@
-import { handleAskAiRequest } from '../server/ask-ai';
+import { handleAskAiRequest } from '../server/ask-ai.js';
 
 type ApiRequest = {
   method?: string;

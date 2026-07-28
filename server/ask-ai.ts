@@ -5,7 +5,7 @@ import type {
   AskAiRequestBody,
   AskAiScope,
   AskAiStructuredContext,
-} from '../src/shared/api/askAi';
+} from '../src/shared/api/askAi.js';
 
 type AskAiHandlerResult = {
   status: number;
