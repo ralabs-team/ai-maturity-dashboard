@@ -21,17 +21,8 @@ export default function SensitiveText({
       title={hidden ? undefined : title}
       className={cn(
         className,
-        hidden &&
-          'select-none rounded-sm bg-[#d9d9d9] text-transparent opacity-100 transition-[background-color,color] duration-150 ease-out',
+        hidden && 'blur-[5px]',
       )}
-      style={
-        hidden
-          ? {
-              color: 'transparent',
-              WebkitTextFillColor: 'transparent',
-            }
-          : undefined
-      }
     >
       {children}
     </Component>
