@@ -15,6 +15,7 @@ import {
   Loader2,
   Eye,
   EyeOff,
+  Scale,
   Pencil,
   LibraryBig,
 } from 'lucide-react';
@@ -32,6 +33,7 @@ import {
   SidebarSeparator,
   useSidebar,
 } from '../ui/sidebar';
+import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
 import { useSensitiveData } from '../privacy/SensitiveDataContext';
 import { INDIVIDUAL_ARCHETYPE_CATALOG } from '../../data/survey/individualArchetypes';
 import { TEAM_ARCHETYPE_CATALOG } from '../../data/survey/teamArchetypes';
@@ -118,7 +120,12 @@ export default function Sidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const isCollapsed = state === 'collapsed';
-  const { rawResponses, hasResponseData } = useSurveyData();
+  const {
+    rawResponses,
+    hasResponseData,
+    useBalancedScoring,
+    toggleBalancedScoring,
+  } = useSurveyData();
   const { isSensitiveDataHidden, toggleSensitiveData } = useSensitiveData();
   const { workspaceName, openWorkspaceIdentityModal } = useWorkspaceIdentity();
   const { pendingPath, startPendingNavigation, clearPendingNavigation } = useNavigationPending();
@@ -350,6 +357,50 @@ export default function Sidebar() {
                 </>
               )}
             </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <SidebarMenuButton
+                  onClick={toggleBalancedScoring}
+                  aria-pressed={useBalancedScoring}
+                >
+                  <Scale className="h-4 w-4 shrink-0" />
+                  <span className="min-w-0 flex-1 truncate group-data-[collapsible=icon]:hidden">
+                    Use Balanced Scoring
+                  </span>
+                  <span
+                    className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide group-data-[collapsible=icon]:hidden ${
+                      useBalancedScoring
+                        ? 'bg-teal-100 text-teal-700'
+                        : 'bg-[var(--sidebar-accent)] text-[var(--sidebar-muted)]'
+                    }`}
+                  >
+                    {useBalancedScoring ? 'On' : 'Off'}
+                  </span>
+                </SidebarMenuButton>
+              </TooltipTrigger>
+              <TooltipContent
+                side="right"
+                align="end"
+                sideOffset={8}
+                className="max-w-80 px-4 py-3 leading-relaxed"
+              >
+                <div className="font-semibold">Use Balanced Scoring</div>
+                <div className="mt-1 text-white/80">
+                  When on, the lowest-scoring dimension can cap the overall maturity level so
+                  stronger dimensions do not hide an important weakness. When off, the level is
+                  based only on the five-dimension average.
+                </div>
+                <div className="mt-2 border-t border-white/20 pt-2 text-white/80">
+                  Example: scores of 2.9, 3.5, 3.9, 2.0, and 4.0 average 3.3. Balanced scoring off
+                  gives L3; on, the 2.0 dimension caps the result at L2.
+                </div>
+                <div className="mt-2 font-medium text-white">
+                  Currently {useBalancedScoring ? 'on' : 'off'}
+                </div>
+              </TooltipContent>
+            </Tooltip>
           </SidebarMenuItem>
           <SidebarMenuItem>
             <SidebarMenuButton

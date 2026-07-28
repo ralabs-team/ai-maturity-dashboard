@@ -1,5 +1,6 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -32,6 +33,7 @@ import { buildRawResponsesFromDatasets } from './responses';
 
 const STORAGE_KEY = 'ai-maturity-dashboard.survey-csv-overrides.v1';
 const PERSON_NAME_OVERRIDES_STORAGE_KEY = 'ai-maturity-dashboard.person-name-overrides.v1';
+const BALANCED_SCORING_STORAGE_KEY = 'ai-maturity-dashboard.balanced-scoring.v1';
 
 type SurveyCsvOverrides = Partial<Record<string, string>>;
 type PersonNameOverrides = Record<string, string>;
@@ -43,6 +45,9 @@ interface SurveyDataContextValue {
   individuals: Individual[];
   orgAvgScores: Record<TechDimension, number>;
   hasResponseData: boolean;
+  useBalancedScoring: boolean;
+  setUseBalancedScoring: (value: boolean | ((value: boolean) => boolean)) => void;
+  toggleBalancedScoring: () => void;
   replaceSurveyCsv: (surveyId: string, csvText: string) => void;
   resetSurveyCsv: (surveyId: string) => void;
   resetAllSurveyCsvs: () => void;
@@ -184,6 +189,28 @@ export function SurveyDataProvider({ children }: { children: ReactNode }) {
   const [personNameOverrides, setPersonNameOverrides] = useState<PersonNameOverrides>(() =>
     readStoredPersonNameOverrides(),
   );
+  const [useBalancedScoring, setUseBalancedScoringState] = useState(() => {
+    if (typeof window === 'undefined') {
+      return false;
+    }
+
+    return window.localStorage.getItem(BALANCED_SCORING_STORAGE_KEY) === 'true';
+  });
+
+  const setUseBalancedScoring = useCallback(
+    (value: boolean | ((value: boolean) => boolean)) => {
+      setUseBalancedScoringState((current) => {
+        const nextValue = typeof value === 'function' ? value(current) : value;
+        window.localStorage.setItem(BALANCED_SCORING_STORAGE_KEY, String(nextValue));
+        return nextValue;
+      });
+    },
+    [],
+  );
+
+  const toggleBalancedScoring = useCallback(() => {
+    setUseBalancedScoring((current) => !current);
+  }, [setUseBalancedScoring]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -225,8 +252,8 @@ export function SurveyDataProvider({ children }: { children: ReactNode }) {
     [personNameOverrides],
   );
   const individuals = useMemo(
-    () => deriveIndividualsFromResponses(rawResponses, resolvePersonName),
-    [rawResponses, resolvePersonName],
+    () => deriveIndividualsFromResponses(rawResponses, resolvePersonName, useBalancedScoring),
+    [rawResponses, resolvePersonName, useBalancedScoring],
   );
   const orgAvgScores = useMemo(
     () => deriveOrgAverageScores(individuals),
@@ -242,6 +269,9 @@ export function SurveyDataProvider({ children }: { children: ReactNode }) {
       individuals,
       orgAvgScores,
       hasResponseData,
+      useBalancedScoring,
+      setUseBalancedScoring,
+      toggleBalancedScoring,
       resolvePersonName,
       replaceSurveyCsv: (surveyId: string, csvText: string) => {
         validateSurveyDataset({
@@ -531,6 +561,9 @@ export function SurveyDataProvider({ children }: { children: ReactNode }) {
       rawResponses,
       rawSurveyDatasets,
       resolvePersonName,
+      setUseBalancedScoring,
+      toggleBalancedScoring,
+      useBalancedScoring,
     ],
   );
 

@@ -14,9 +14,10 @@ const NON_TECH_ROLES = new Set(['PM', 'Sales', 'HR', 'Marketing', 'Finance']);
 function deriveIndividual(
   response: (typeof rawResponses)[number],
   resolvePersonName: (username: string) => string = nameFromEmail,
+  useBalancedScoring = false,
 ): Individual {
   const r = response;
-  const result = computeScores(r);
+  const result = computeScores(r, { useBalancedScoring });
 
   const role = roleFromDepartment(r.department);
   const roleType: RoleType =
@@ -54,8 +55,11 @@ function deriveIndividual(
 export function deriveIndividualsFromResponses(
   responses: typeof rawResponses,
   resolvePersonName: (username: string) => string = nameFromEmail,
+  useBalancedScoring = false,
 ): Individual[] {
-  return responses.map((response) => deriveIndividual(response, resolvePersonName));
+  return responses.map((response) =>
+    deriveIndividual(response, resolvePersonName, useBalancedScoring),
+  );
 }
 
 export const individuals: Individual[] = deriveIndividualsFromResponses(rawResponses);

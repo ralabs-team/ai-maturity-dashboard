@@ -1,4 +1,4 @@
-import type { TechDimension } from './maturity';
+import { scoreToLevel, type TechDimension } from './maturity';
 import {
   scoreBusinessCultureEntries,
   scoreBusinessImpactEntries,
@@ -41,7 +41,14 @@ export type {
   SurveyType,
 };
 
-export function computeScores(r: RawResponse): ScoringResult {
+export interface ScoringOptions {
+  useBalancedScoring?: boolean;
+}
+
+export function computeScores(
+  r: RawResponse,
+  { useBalancedScoring = false }: ScoringOptions = {},
+): ScoringResult {
   const surveyType = r.surveyType ?? 'delivery-engineering';
   const questionScores: Record<string, QuestionScore> = {};
 
@@ -77,13 +84,15 @@ export function computeScores(r: RawResponse): ScoringResult {
     Culture: dimensions.Culture.score,
     Vision: dimensions.Vision.score,
   });
-  const overallLevel = computeGuardrailedOverallLevel(overallScore, {
-    Usage: dimensions.Usage.score,
-    Skills: dimensions.Skills.score,
-    Impact: dimensions.Impact.score,
-    Culture: dimensions.Culture.score,
-    Vision: dimensions.Vision.score,
-  });
+  const overallLevel = useBalancedScoring
+    ? computeGuardrailedOverallLevel(overallScore, {
+        Usage: dimensions.Usage.score,
+        Skills: dimensions.Skills.score,
+        Impact: dimensions.Impact.score,
+        Culture: dimensions.Culture.score,
+        Vision: dimensions.Vision.score,
+      })
+    : scoreToLevel(overallScore);
 
   return {
     dimensions,
